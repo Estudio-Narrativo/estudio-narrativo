@@ -120,15 +120,27 @@ setTimeout(() => URL.revokeObjectURL(url), 1000);
 // --- DADOS INICIAIS DA APLICAÇÃO ---
 
 const LIVROS_INICIAIS = [
-{
-id: 'b1',
-title: 'A Sombra do Tempo',
-author: 'Alexandre Sousa',
-genre: 'Ficção Científica',
-coverColor: 'from-purple-600 to-indigo-800',
-synopsis: 'Uma jornada através das fendas temporais da Via Láctea, onde o passado e o futuro colidem em uma estação espacial abandonada.',
-content: Capítulo 1: O Despertar\n\nO silêncio na estação espacial era quase ensurdecedor. Lucas olhou através da janela de quartzo e observou as estrelas distantes se contorcendo na dobra espacial.\n\n"Tudo pronto para o salto?", perguntou a inteligência artificial da nave, sua voz ecoando suavemente pelo painel de controle.\n\nA poeira estelar cobria a fiação do módulo principal. Nada naquelas coordenadas batia com os mapas galácticos antigos. Precisamos calibrar o reator secundário antes de avançar, alertou Lucas, ajustando as chaves do console.\n\nCapítulo 2: O Sinal\n\nUm bipe estridente cortou o ar estático do convés de comando. O painel holográfico piscou em carmesim.\n\n"Detectando emissão de táquions a 400 milhas náuticas", anunciou a IA. "Assinatura idêntica à nave de reconhecimento perdida há quarenta anos."
-}
+  {
+    id: 'b1',
+    title: 'A Sombra do Tempo',
+    author: 'Alexandre Sousa',
+    genre: 'Ficção Científica',
+    coverColor: 'from-purple-600 to-indigo-800',
+    synopsis: 'Uma jornada através das fendas temporais da Via Láctea, onde o passado e o futuro colidem em uma estação espacial abandonada.',
+    content: `Capítulo 1: O Despertar
+
+O silêncio na estação espacial era quase ensurdecedor. Lucas olhou através da janela de quartzo e observou as estrelas distantes se contorcendo na dobra espacial.
+
+"Tudo pronto para o salto?", perguntou a inteligência artificial da nave, sua voz ecoando suavemente pelo painel de controle.
+
+A poeira estelar cobria a fiação do módulo principal. Nada naquelas coordenadas batia com os mapas galácticos antigos. Precisamos calibrar o reator secundário antes de avançar, alertou Lucas, ajustando as chaves do console.
+
+Capítulo 2: O Sinal
+
+Um bipe estridente cortou o ar estático do convés de comando. O painel holográfico piscou em carmesim.
+
+"Detectando emissão de táquions a 400 milhas náuticas", anunciou a IA. "Assinatura idêntica à nave de reconhecimento perdida há quarenta anos."`
+  }
 ];
 
 const PDFS_INICIAIS = [
