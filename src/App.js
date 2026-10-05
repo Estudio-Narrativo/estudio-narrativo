@@ -142,27 +142,34 @@ Um bipe estridente cortou o ar estático do convés de comando. O painel hologr�
 "Detectando emissão de táquions a 400 milhas náuticas", anunciou a IA. "Assinatura idêntica à nave de reconhecimento perdida há quarenta anos."`
   }
 ];
-
 const PDFS_INICIAIS = [
-{
-id: 'doc_1',
-title: 'Manual de Escrita Criativa',
-fileName: 'manual_escrita.txt',
-size: '1.2 KB',
-uploadedAt: '2026-03-20',
-content: A Estrutura Narrativa e a Arte de Contar Histórias\n\nA estrutura de três atos é um modelo utilizado na escrita dramática que divide uma história em três partes fundamentais: Exposição, Confronto e Resolução.\n\nNo Primeiro Ato, o universo e os personagens são apresentados. O incidente incitante rompe o equilíbrio do protagonista, forçando-o a tomar uma decisão transformadora.\n\nNo Segundo Ato, os obstáculos se multiplicam. O protagonista enfrenta provações e derrotas temporárias, culminando no ponto de maior tensão ou crise da jornada.\n\nNo Terceiro Ato, ocorre o clímax: o confronto final onde os dilemas centrais da história são resolvidos. Em seguida, a narrativa se encerra com a consolidação de um novo equilíbrio,
-}
+  {
+    id: 'doc_1',
+    title: 'Manual de Escrita Criativa',
+    fileName: 'manual_escrita.txt',
+    size: '1.2 KB',
+    uploadedAt: '2026-03-20',
+    content: `A Estrutura Narrativa e a Arte de Contar Histórias
+
+A estrutura de três atos é um modelo utilizado na escrita dramática que divide uma história em três partes fundamentais: Exposição, Confronto e Resolução.
+
+No Primeiro Ato, o universo e os personagens são apresentados. O incidente incitante rompe o equilíbrio do protagonista, forçando-o a tomar uma decisão transformadora.
+
+No Segundo Ato, os obstáculos se multiplicam. O protagonista enfrenta provações e derrotas temporárias, culminando no ponto de maior tensão ou crise da jornada.
+
+No Terceiro Ato, ocorre o clímax: o confronto final onde os dilemas centrais da história são resolvidos. Em seguida, a narrativa se encerra com a consolidação de um novo equilíbrio.`
+  }
 ];
 
 const APRENDIZAGEM_CONTEUDO = [
-{
-id: 'estruturas',
-title: 'Construção & Estruturas',
-icon: Compass,
-description: 'Modelos de arquitetura narrativa, controle de ritmo e métodos de expansão de enredo.',
-lessons: [
-{
-subtitle: 'Estrutura de 3 Atos',
+  {
+    id: 'estruturas',
+    title: 'Construção & Estruturas',
+    icon: Compass,
+    description: 'Modelos de arquitetura narrativa, controle de ritmo e métodos de expansão de enredo.',
+    lessons: [
+      {
+        subtitle: 'Estrutura de 3 Atos',
 tag: 'Arquitetura',
 details: 'Divide a narrativa em Exposição (Incidente Incitante), Confronto (Pontos de Virada, Midpoint e Crise) e Resolução (Clímax e Novo Equilíbrio). Garante clareza e ritmo estruturado.'
 },
