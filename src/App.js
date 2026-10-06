@@ -571,7 +571,7 @@ export default function EstudioApp() {
           {toast}
         </div>
       )}
-{/* Modal de Confirmação de Exclusão */}
+  {/* Modal de Confirmação de Exclusão */}
       {deleteConfirmId && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className={`max-w-md w-full border rounded-2xl p-6 shadow-xl ${theme === 'dark' ? 'border-slate-800 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white text-slate-900'}`}>
@@ -596,3 +596,4 @@ export default function EstudioApp() {
           </div>
         </div>
       )}
+  
