@@ -492,3 +492,621 @@ export default function EstudioApp() {
     };
     reader.readAsText(file);
     e.target.value
+
+    // Algoritmo Otimizado de Paginação do Leitor (Flipbook)
+  const pages = useMemo(() => {
+    if (!flipbookBook) return ['Sem conteúdo para exibição.'];
+    const fullText = flipbookBook.content || 'Conteúdo em branco.';
+    const paragraphs = fullText.split('\n');
+    const resultPages = [];
+    let currentPage = '';
+    const WORDS_PER_PAGE = 220;
+
+    for (let p of paragraphs) {
+      const pageWordCount = calculateWords(currentPage);
+      const paragraphWordCount = calculateWords(p);
+
+      if (pageWordCount + paragraphWordCount > WORDS_PER_PAGE && currentPage.length > 0) {
+        resultPages.push(currentPage.trim());
+        currentPage = p + '\n\n';
+      } else {
+        currentPage += p + '\n\n';
+      }
+    }
+
+    if (currentPage.trim().length > 0) {
+      resultPages.push(currentPage.trim());
+    }
+
+    return resultPages.length > 0 ? resultPages : ['Sem conteúdo para exibição.'];
+  }, [flipbookBook]);
+
+  const openFlipbook = (book) => {
+    setFlipbookBook(book);
+    setCurrentPageIndex(0);
+    setFlipbookActive(true);
+  };
+
+  const closeFlipbook = () => {
+    setFlipbookActive(false);
+    setFlipbookBook(null);
+  };
+
+  const filteredLessons = useMemo(() => {
+    const activeMod = APRENDIZAGEM_CONTEUDO.find(m => m.id === selectedModule) || APRENDIZAGEM_CONTEUDO[0];
+    if (!searchTerm.trim()) return activeMod.lessons;
+    
+    const term = searchTerm.toLowerCase();
+    return activeMod.lessons.filter(l => 
+      l.subtitle.toLowerCase().includes(term) || 
+      l.details.toLowerCase().includes(term) ||
+      l.tag.toLowerCase().includes(term)
+    );
+  }, [selectedModule, searchTerm]);
+
+  const isDark = theme === 'dark';
+
+  return (
+    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
+      
+      {/* HEADER / NAVBAR */}
+      <header className={`sticky top-0 z-30 border-b backdrop-blur-md ${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white/90 border-slate-200'}`}>
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+          
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className={`p-2 rounded-lg md:hidden ${isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}
+              aria-label="Toggle Menu"
+            >
+              <Menu className="w-5 h-5"/>
+            </button>
+            
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-500/30">
+                <Feather className="w-5 h-5"/>
+              </div>
+              <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
+                Estúdio Narrativo
+              </span>
+            </div>
+          </div>
+
+          {/* NAVEGAÇÃO DESKTOP */}
+          <nav className="hidden md:flex items-center gap-1 bg-slate-800/20 p-1 rounded-xl border border-slate-700/30">
+            <button
+              onClick={() => setActiveTab('library')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'library' 
+                  ? 'bg-indigo-600 text-white shadow-md' 
+                  : isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <BookOpen className="w-4 h-4"/>
+              Biblioteca
+            </button>
+
+            <button
+              onClick={() => setActiveTab('editor')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'editor' 
+                  ? 'bg-indigo-600 text-white shadow-md' 
+                  : isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <Edit3 className="w-4 h-4"/>
+              Editor Pro
+            </button>
+
+            <button
+              onClick={() => setActiveTab('learning')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'learning' 
+                  ? 'bg-indigo-600 text-white shadow-md' 
+                  : isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <GraduationCap className="w-4 h-4"/>
+              Central de Aprendizado
+            </button>
+          </nav>
+
+         {/* CONTROLES / TEMA */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleTheme}
+              className={`p-2 rounded-xl border transition-all ${
+                isDark 
+                  ? 'bg-slate-900 border-slate-800 text-amber-400 hover:bg-slate-800' 
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+              title="Alternar Tema"
+            >
+              {isDark ? <Sun className="w-5 h-5"/> : <Moon className="w-5 h-5"/>}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* MOBILE SIDEBAR MENU */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-40 md:hidden flex">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
+          <div className={`relative w-64 max-w-xs flex-1 flex flex-col py-6 px-4 shadow-xl ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-800'}`}>
+            <div className="flex items-center justify-between mb-8">
+              <span className="font-bold text-lg text-indigo-500">Navegação</span>
+              <button onClick={() => setSidebarOpen(false)} className="p-1 rounded-lg hover:bg-slate-800/20">
+                <X className="w-6 h-6"/>
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => { setActiveTab('library'); setSidebarOpen(false); }}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium ${activeTab === 'library' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800/10'}`}
+              >
+                <BookOpen className="w-5 h-5"/> Biblioteca
+              </button>
+              <button
+                onClick={() => { setActiveTab('editor'); setSidebarOpen(false); }}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium ${activeTab === 'editor' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800/10'}`}
+              >
+                <Edit3 className="w-5 h-5"/> Editor Pro
+              </button>
+              <button
+                onClick={() => { setActiveTab('learning'); setSidebarOpen(false); }}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium ${activeTab === 'learning' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800/10'}`}
+              >
+                <GraduationCap className="w-5 h-5"/> Central de Aprendizado
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ÁREA DE CONTEÚDO PRINCIPAL */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6">
+        
+        {/* --- TAB 1: BIBLIOTECA --- */}
+        {activeTab === 'library' && (
+          <div className="space-y-8 animate-fadeIn">
+            
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-6">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Sua Estante Digital</h1>
+                <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Gerencie seus manuscritos e documentos de estudo localmente.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <input 
+                  type="file" 
+                  ref={jsonFileInputRef} 
+                  onChange={handleImportJSON} 
+                  accept=".json" 
+                  className="hidden" 
+                />
+                <button
+                  onClick={() => jsonFileInputRef.current?.click()}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                    isDark ? 'border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  <Upload className="w-4 h-4 text-indigo-400"/>
+                  Importar Projeto JSON
+                </button>
+
+                <button
+                  onClick={handleCreateNewBook}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium shadow-lg shadow-indigo-600/30 transition-all"
+                >
+                  <Plus className="w-4 h-4"/>
+                  Novo Manuscrito
+                </button>
+              </div>
+            </div>
+
+            {/* SEÇÃO: MEUS MANUSCRITOS */}
+            <div>
+              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <Feather className="w-5 h-5 text-indigo-500"/>
+                Manuscritos Ativos ({books.length})
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {books.map((book) => (
+                  <div
+                    key={book.id}
+                    className={`group relative rounded-2xl border p-5 flex flex-col justify-between transition-all duration-200 hover:shadow-xl ${
+                      isDark ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div>
+                      <div className={`h-32 rounded-xl bg-gradient-to-br ${book.coverColor || 'from-indigo-600 to-purple-800'} p-4 flex flex-col justify-between text-white shadow-inner mb-4`}>
+                        <span className="text-xs font-semibold uppercase tracking-wider bg-black/30 px-2 py-1 rounded-md w-fit backdrop-blur-sm">
+                          {book.genre || 'Geral'}
+                        </span>
+                        <div>
+                          <h3 className="font-bold text-lg leading-snug line-clamp-1">{book.title}</h3>
+                          <p className="text-xs text-white/80">{book.author}</p>
+                        </div>
+                      </div>
+
+                      <p className={`text-xs line-clamp-3 mb-4 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                        {book.synopsis || 'Sem sinopse informada.'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-800/50 text-xs">
+                      <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>
+                        {calculateWords(book.content)} palavras
+                      </span>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openFlipbook(book)}
+                          className="p-2 rounded-lg hover:bg-indigo-600/10 text-indigo-400 transition-colors"
+                          title="Ler no Flipbook"
+                        >
+                          <BookOpen className="w-4 h-4"/>
+                        </button>
+                        <button
+                          onClick={() => handleExportJSON(book)}
+                          className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 transition-colors"
+                          title="Exportar JSON"
+                        >
+                          <Download className="w-4 h-4"/>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedBookId(book.id);
+                            setActiveTab('editor');
+                          }}
+                          className="p-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+                          title="Editar Manuscrito"
+                        >
+                          <Edit3 className="w-4 h-4"/>
+                        </button>
+                        <button
+                          onClick={() => confirmDeleteBook(book.id)}
+                          className="p-2 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors"
+                          title="Excluir"
+                        >
+                          <Trash2 className="w-4 h-4"/>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* SEÇÃO: DOCUMENTOS & PDFs DE ESTUDO */}
+            <div className="pt-6 border-t border-slate-800">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-indigo-500"/>
+                  Documentos de Apoio ({myPdfs.length})
+                </h2>
+
+                <input 
+                  type="file" 
+                  ref={docFileInputRef} 
+                  onChange={handleFileUpload} 
+                  accept=".txt,.md" 
+                  className="hidden" 
+                />
+                <button
+                  onClick={() => docFileInputRef.current?.click()}
+                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all"
+                >
+                  <FileUp className="w-4 h-4 text-indigo-400"/>
+                  Anexar Documento (.txt / .md)
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {myPdfs.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className={`p-4 rounded-xl border flex items-center justify-between ${
+                      isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <div className="p-2.5 bg-indigo-600/10 text-indigo-400 rounded-lg">
+                        <FileText className="w-5 h-5"/>
+                      </div>
+                      <div className="truncate">
+                        <h4 className="font-semibold text-sm truncate">{doc.title}</h4>
+                        <p className="text-xs text-slate-500">{doc.fileName} • {doc.size}</p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => openFlipbook({ title: doc.title, content: doc.content })}
+                      className="px-3 py-1.5 rounded-lg border border-slate-700 hover:bg-slate-800 text-xs text-indigo-400 transition-colors whitespace-nowrap ml-2"
+                    >
+                      Visualizar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* --- TAB 2: EDITOR PRO --- */}
+        {activeTab === 'editor' && (
+          <div className="h-[calc(100vh-8rem)] flex flex-col md:flex-row gap-4 animate-fadeIn">
+            
+            {/* PAINEL LATERAL DO EDITOR */}
+            <div className={`w-full md:w-64 flex flex-col rounded-2xl border p-4 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+              <h3 className="font-bold text-sm uppercase tracking-wider text-slate-500 mb-3">Seus Manuscritos</h3>
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                {books.map(b => (
+                  <button
+                    key={b.id}
+                    onClick={() => setSelectedBookId(b.id)}
+                    className={`w-full text-left p-3 rounded-xl transition-all ${
+                      b.id === selectedBookId 
+                        ? 'bg-indigo-600 text-white font-medium shadow-md' 
+                        : isDark ? 'hover:bg-slate-800/60 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold truncate">{b.title || 'Sem título'}</p>
+                    <p className="text-xs opacity-75 truncate">{calculateWords(b.content)} palavras</p>
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={handleCreateNewBook}
+                className="mt-3 w-full py-2.5 rounded-xl border border-dashed border-slate-700 hover:border-indigo-500 text-indigo-400 flex items-center justify-center gap-2 text-xs font-semibold transition-all"
+              >
+                <Plus className="w-4 h-4"/> Criar Projeto
+              </button>
+            </div>
+
+            {/* ÁREA DO EDITOR DE TEXTO */}
+            <div className={`flex-1 flex flex-col rounded-2xl border ${isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200'}`}>
+              
+              {/* BARRA DE FERRAMENTAS DO EDITOR */}
+              <div className="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-4">
+                <input
+                  type="text"
+                  value={currentBook.title || ''}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  placeholder="Título do Manuscrito..."
+                  className="bg-transparent text-xl font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded-lg px-2 py-1 flex-1 min-w-[200px]"
+                />
+
+                <div className="flex items-center gap-3 text-xs">
+                  <span className={`px-2.5 py-1 rounded-full ${
+                    saveStatus === 'salvo' ? 'bg-emerald-500/10 text-emerald-400' :
+                    saveStatus === 'salvando' ? 'bg-amber-500/10 text-amber-400' : 'bg-rose-500/10 text-rose-400'
+                  }`}>
+                    {saveStatus === 'salvo' ? '✓ Salvo' : saveStatus === 'salvando' ? 'Salvando...' : 'Erro ao salvar'}
+                  </span>
+
+                  <button
+                    onClick={() => handleExportTXT(currentBook)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5"/> Baixar .TXT
+                  </button>
+                </div>
+              </div>
+
+              {/* EDITOR DE TEXTO (TEXTAREA RUSTICO & EFICIENTE) */}
+              <div className="flex-1 p-4 flex flex-col">
+                <textarea
+                  value={currentBook.content || ''}
+                  onChange={(e) => handleContentChange(e.target.value)}
+                  placeholder="Escreva sua história aqui... Use o atalho Ctrl+S para salvar manualmente a qualquer momento."
+                  className={`w-full flex-1 p-4 bg-transparent resize-none focus:outline-none font-serif text-lg leading-relaxed ${
+                    isDark ? 'text-slate-200 placeholder-slate-600' : 'text-slate-800 placeholder-slate-400'
+                  }`}
+                  style={{ fontSize: `${fontSize}px` }}
+                />
+              </div>
+
+              {/* BARRA DE STATUS INFERIOR */}
+              <div className="px-4 py-3 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500">
+                <div className="flex items-center gap-4">
+                  <span>{currentBookWords} palavras</span>
+                  <span>{(currentBook.content || '').length} caracteres</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span>Tamanho da Fonte:</span>
+                  <button 
+                    onClick={() => setFontSize(f => Math.max(12, f - 2))} 
+                    className="p-1 rounded hover:bg-slate-800 font-bold"
+                  >
+                    -
+                  </button>
+                  <span>{fontSize}px</span>
+                  <button 
+                    onClick={() => setFontSize(f => Math.min(28, f + 2))} 
+                    className="p-1 rounded hover:bg-slate-800 font-bold"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
+        {/* --- TAB 3: CENTRAL DE APRENDIZADO --- */}
+        {activeTab === 'learning' && (
+          <div className="space-y-6 animate-fadeIn">
+            
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-6">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Central de Aprendizado</h1>
+                <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Guias estruturados, teoria literária e técnicas avançadas de narrativa.
+                </p>
+              </div>
+
+              <div className="relative w-full md:w-72">
+                <Search className="w-4 h-4 absolute left-3 top-3 text-slate-500"/>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Buscar técnicas ou conceitos..."
+                  className={`w-full pl-9 pr-4 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                    isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
+                  }`}
+                />
+              </div>
+            </div>
+
+            {/* ABAS DOS MÓDULOS */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2">
+              {APRENDIZAGEM_CONTEUDO.map((mod) => {
+                const IconComponent = mod.icon;
+                return (
+                  <button
+                    key={mod.id}
+                    onClick={() => setSelectedModule(mod.id)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
+                      selectedModule === mod.id
+                        ? 'bg-indigo-600 text-white shadow-md'
+                        : isDark ? 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200' : 'bg-white border border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    <IconComponent className="w-4 h-4"/>
+                    {mod.title}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* LISTA DE AULAS/CONTEÚDOS */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {filteredLessons.map((lesson, idx) => (
+                <div
+                  key={idx}
+                  className={`p-6 rounded-2xl border transition-all ${
+                    isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-indigo-600/10 text-indigo-400 border border-indigo-500/20">
+                      {lesson.tag}
+                    </span>
+                  </div>
+
+                  <h3 className="text-lg font-bold mb-2">{lesson.subtitle}</h3>
+                  <p className={`text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                    {lesson.details}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+          </div>
+        )}
+
+      </main>
+
+      {/* --- MODAL: LEITOR FLIPBOOK --- */}
+      {flipbookActive && flipbookBook && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className={`relative w-full max-w-3xl h-[85vh] rounded-2xl border flex flex-col shadow-2xl overflow-hidden ${
+            isDark ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-amber-50/95 border-amber-200 text-amber-950'
+          }`}>
+            
+            {/* TOPO DO LEITOR */}
+            <div className="p-4 border-b border-slate-800/40 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-indigo-500"/>
+                <h3 className="font-bold text-sm truncate max-w-md">{flipbookBook.title}</h3>
+              </div>
+              <button
+                onClick={closeFlipbook}
+                className="p-1.5 rounded-lg hover:bg-slate-800/20 transition-colors"
+              >
+                <X className="w-6 h-6"/>
+              </button>
+            </div>
+
+            {/* PÁGINA DO LIVRO */}
+            <div className="flex-1 p-8 overflow-y-auto font-serif leading-relaxed text-lg whitespace-pre-wrap">
+              {pages[currentPageIndex]}
+            </div>
+
+            {/* NAVEGAÇÃO DE PÁGINAS */}
+            <div className="p-4 border-t border-slate-800/40 flex items-center justify-between text-xs">
+              <button
+                disabled={currentPageIndex === 0}
+                onClick={() => setCurrentPageIndex(p => Math.max(0, p - 1))}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-800/20"
+              >
+                <ChevronLeft className="w-4 h-4"/> Anterior
+              </button>
+
+              <span>Página {currentPageIndex + 1} de {pages.length}</span>
+
+              <button
+                disabled={currentPageIndex >= pages.length - 1}
+                onClick={() => setCurrentPageIndex(p => Math.min(pages.length - 1, p + 1))}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-800/20"
+              >
+                Próxima <ChevronRight className="w-4 h-4"/>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: CONFIRMAÇÃO DE DELEÇÃO --- */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className={`p-6 rounded-2xl border max-w-sm w-full space-y-4 ${
+            isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+          }`}>
+            <div className="flex items-center gap-3 text-rose-500">
+              <AlertTriangle className="w-6 h-6"/>
+              <h3 className="font-bold text-lg">Confirmar Exclusão</h3>
+            </div>
+            <p className="text-sm text-slate-400">
+              Tem certeza que deseja excluir este manuscrito? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="px-4 py-2 rounded-xl text-sm border border-slate-700 hover:bg-slate-800"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={executeDeleteBook}
+                className="px-4 py-2 rounded-xl text-sm bg-rose-600 hover:bg-rose-500 text-white font-medium"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- TOAST NOTIFICATION --- */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-slideUp text-sm font-medium">
+          <Check className="w-4 h-4"/>
+          {toast}
+        </div>
+      )}
+
+    </div>
+  );
+        }
