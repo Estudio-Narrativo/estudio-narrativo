@@ -266,7 +266,7 @@ export default function EstudioApp() {
   );
 }
 {
-id: 'tendencias',
+    id: 'tendencias',
     title: 'Gêneros & Mercado Editorial',
     icon: TrendingUp,
     description: 'Análise de gêneros em alta, nichos de leitores e publicação moderna.',
