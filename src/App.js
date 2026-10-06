@@ -220,24 +220,24 @@ icon: Lightbulb,
 description: 'Perspectivas narrativas, regras de construção de mundo e técnicas de prosa.',
 lessons: [
 {
-subtitle: 'Foco Narrativo / Ponto de Vista (POV)',
-tag: 'Perspectiva',
-details: '1ª Pessoa (íntima e visceral, com foco em narradores não confiáveis), 3ª Pessoa Limitada (imersão focada em um único personagem por cena) e 3ª Pessoa Onisciente (visão panorâmica e editorial).'
-},
-{
-subtitle: 'Construção de Mundo (Worldbuilding)',
-tag: 'Ambientação',
-details: 'Aplicações práticas das Leis de Sanderson para Sistemas de Magia (Duros vs. Macios), consistência geopolítica, aspectos socioculturais e atmosfera.'
-},
-{
-subtitle: 'Show, Don't Tell (Mostre, Não Conte)',
-tag: 'Escrita',
-details: 'Demonstre emoções e intenções através de sensações viscerais, linguagem corporal e ações concretas em vez de resumos expositivos explícitos.'
-}
-]
-},
-{
-id: 'tendencias',
+        subtitle: 'Foco Narrativo / Ponto de Vista (POV)',
+        tag: 'Perspectiva',
+        details: '1ª Pessoa (íntima e visceral, com foco em narradores não confiáveis), 3ª Pessoa Limitada (imersão focada em um único personagem por cena) e 3ª Pessoa Onisciente (visão panorâmica e editorial).'
+      },
+      {
+        subtitle: 'Construção de Mundo (Worldbuilding)',
+        tag: 'Ambientação',
+        details: 'Aplicações práticas das Leis de Sanderson para Sistemas de Magia (Duros vs. Macios), consistência geopolítica, aspectos socioculturais e atmosfera.'
+      },
+      {
+        subtitle: "Show, Don't Tell (Mostre, Não Conte)",
+        tag: 'Escrita',
+        details: 'Demonstre emoções e intenções através de sensações viscerais, linguagem corporal e ações concretas em vez de resumos expositivos explícitos.'
+      }
+    ]
+  },
+  {
+    id: 'tendencias',
 title: 'Gêneros & Mercado Editorial',
 icon: TrendingUp,
 description: 'Análise de gêneros em alta, nichos de leitores e publicação moderna.',
