@@ -265,7 +265,26 @@ export default function EstudioApp() {
     </div>
   );
 }
-cificidades entre Cyberpunk, Space Opera, Solarpunk e Sci-Fi Hard (baseado em rigor científico).'
+{
+id: 'tendencias',
+    title: 'Gêneros & Mercado Editorial',
+    icon: TrendingUp,
+    description: 'Análise de gêneros em alta, nichos de leitores e publicação moderna.',
+    lessons: [
+      {
+        subtitle: 'Fantasia & Romantasy',
+        tag: 'Tendência Mercado',
+        details: 'O fenômeno do Romantasy (subgêneros de fantasia com forte foco em romance e tensão interpessoal), High Fantasy e Urban Fantasy no mercado contemporâneo.'
+      },
+      {
+        subtitle: 'Thriller & Ficção Policial',
+        tag: 'Gênero',
+        details: 'Técnicas de mistérios de quarto fechado (locked-room), procedurais investigativos, thrillers psicológicos e a construção de Plot Twists memoráveis.'
+      },
+      {
+        subtitle: 'Ficção Científica (Sci-Fi)',
+        tag: 'Gênero',
+        details: 'Especificidades entre Cyberpunk, Space Opera, Solarpunk e Sci-Fi Hard (baseado em rigor científico).'
       },
       {
         subtitle: 'Mercado Digital & Autopublicação',
