@@ -505,7 +505,5 @@ export default function EstudioApp() {
   }, [flipbookBook]);
 
   return (
-    }
-    ]
-  }
-];
+    );
+}
