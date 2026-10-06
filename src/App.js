@@ -540,7 +540,3 @@ export default function EstudioApp() {
           {toast}
         </div>
       )}
-
-    </div>
-  );
-}
