@@ -504,4 +504,4 @@ export default function EstudioApp() {
     return pageList.length > 0 ? pageList : ['(Sem conteúdo)'];
   }, [flipbookBook]);
 
-  return (
+  return
