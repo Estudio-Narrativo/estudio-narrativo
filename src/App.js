@@ -16,9 +16,9 @@ export default function EstudioApp() {
   const [activeTab, setActiveTab] = useState('library');
   const [books, setBooks] = useState([]);
   const [selectedBookId, setSelectedBookId] = useState('b1');
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [toast, setToast] = useState(null);
 
-  // Carregamento seguro via LocalStorage com Fallback
   useEffect(() => {
     try {
       const saved = localStorage.getItem('estudio_narrativo_books');
@@ -37,7 +37,6 @@ export default function EstudioApp() {
     setSelectedBookId('b1');
   }, []);
 
-  // Salvamento automático
   const saveBooks = (newBooks) => {
     setBooks(newBooks);
     try {
@@ -83,13 +82,15 @@ export default function EstudioApp() {
   const handleDeleteBook = (id) => {
     if (books.length <= 1) {
       showToast('Mantenha pelo menos um manuscrito.');
+      setDeleteConfirmId(null);
       return;
     }
     const updated = books.filter(b => b.id !== id);
     saveBooks(updated);
     if (selectedBookId === id) {
-      setSelectedBookId(updated[0].id);
+      setSelectedBookId(updated[0]?.id || '');
     }
+    setDeleteConfirmId(null);
     showToast('Manuscrito removido.');
   };
 
@@ -154,13 +155,30 @@ export default function EstudioApp() {
                     >
                       ✏️ Abrir no Editor
                     </button>
-                    <button 
-                      onClick={() => handleDeleteBook(b.id)} 
-                      className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"
-                      title="Apagar manuscrito"
-                    >
-                      🗑️
-                    </button>
+                    {deleteConfirmId === b.id ? (
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => handleDeleteBook(b.id)} 
+                          className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                        >
+                          Confirmar
+                        </button>
+                        <button 
+                          onClick={() => setDeleteConfirmId(null)} 
+                          className="px-2 py-1 bg-slate-700 text-slate-300 text-xs rounded hover:bg-slate-600"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => setDeleteConfirmId(b.id)} 
+                        className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"
+                        title="Apagar manuscrito"
+                      >
+                        🗑️
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -196,31 +214,4 @@ export default function EstudioApp() {
       )}
     </div>
   );
-      }
-          
-  {/* Modal de Confirmação de Exclusão */}
-      {deleteConfirmId && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className={`max-w-md w-full border rounded-2xl p-6 shadow-xl ${theme === 'dark' ? 'border-slate-800 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white text-slate-900'}`}>
-            <h3 className="font-bold text-lg mb-2">Confirmar Exclusão</h3>
-            <p className={`text-sm mb-6 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
-              Tem certeza de que deseja excluir este manuscrito? Esta ação não pode ser desfeita.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button 
-                onClick={() => setDeleteConfirmId(null)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium border ${theme === 'dark' ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'}`}
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={() => handleDeleteBook(deleteConfirmId)}
-                className="px-4 py-2 rounded-xl text-sm font-medium bg-red-600 hover:bg-red-500 text-white shadow-md"
-              >
-                Excluir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-  
+}
