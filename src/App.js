@@ -294,7 +294,6 @@ export default function EstudioApp() {
     ]
   }
 ];
-
 // --- COMPONENTE PRINCIPAL ---
 
 export default function EstudioApp() {
