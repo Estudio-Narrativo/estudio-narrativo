@@ -1068,29 +1068,29 @@ export default function EstudioApp() {
         </div>
       )}
 
-      {/* --- MODAL: CONFIRMAÇÃO DE DELEÇÃO --- */}
+{/* --- MODAL: CONFIRMAÇÃO DE DELEÇÃO --- */}
       {deleteConfirmId && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className={`p-6 rounded-2xl border max-w-sm w-full space-y-4 ${
+          <div className={`p-6 rounded-2xl border max-w-sm w-full ${
             isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
           }`}>
-            <div className="flex items-center gap-3 text-rose-500">
-              <AlertTriangle className="w-6 h-6"/>
-              <h3 className="font-bold text-lg">Confirmar Exclusão</h3>
+            <div className="flex items-center gap-3 text-red-500 mb-3">
+              <AlertTriangle className="w-6 h-6" />
+              <h3 className="font-bold text-lg">Confirmar exclusão</h3>
             </div>
-            <p className="text-sm text-slate-400">
-              Tem certeza que deseja excluir este manuscrito? Esta ação não pode ser desfeita.
+            <p className="text-sm text-slate-400 mb-6">
+              Tem certeza que deseja excluir este manuscrito?
             </p>
-            <div className="flex items-center justify-end gap-3 pt-2">
+            <div className="flex items-center justify-end gap-3">
               <button
                 onClick={() => setDeleteConfirmId(null)}
-                className="px-4 py-2 rounded-xl text-sm border border-slate-700 hover:bg-slate-800"
+                className="px-4 py-2 rounded-xl text-sm font-medium hover:bg-slate-800"
               >
                 Cancelar
               </button>
               <button
                 onClick={executeDeleteBook}
-                className="px-4 py-2 rounded-xl text-sm bg-rose-600 hover:bg-rose-500 text-white font-medium"
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-red-600 hover:bg-red-700 text-white"
               >
                 Excluir
               </button>
@@ -1101,12 +1101,11 @@ export default function EstudioApp() {
 
       {/* --- TOAST NOTIFICATION --- */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-slideUp text-sm font-medium">
-          <Check className="w-4 h-4"/>
+        <div className="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white px-4 py-3 rounded-xl flex items-center gap-2 shadow-lg">
+          <Check className="w-4 h-4" />
           {toast}
         </div>
       )}
-
     </div>
   );
-        }
+}
