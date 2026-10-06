@@ -506,4 +506,42 @@ export default function EstudioApp() {
 
   }
   return (
-    );
+
+   {/* MODAL DE CONFIRMAÇÃO DE DELEÇÃO */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-sm w-full space-y-4">
+            <div className="flex items-center gap-3 text-amber-400">
+              <AlertTriangle className="w-6 h-6" />
+              <h3 className="font-bold text-base text-white">Confirmar Exclusão</h3>
+            </div>
+            <p className="text-xs text-slate-400">Tem certeza de que deseja remover este projeto? Esta ação não poderá ser desfeita.</p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded-lg"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={executeDeleteBook}
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-medium rounded-lg"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TOAST SYSTEM */}
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-50 bg-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-lg text-xs font-medium flex items-center gap-2 animate-bounce">
+          <Sparkles className="w-4 h-4" />
+          {toast}
+        </div>
+      )}
+
+    </div>
+  );
+}
