@@ -505,7 +505,6 @@ export default function EstudioApp() {
   }, [flipbookBook]);
 
   }
-  return (
 
    {/* MODAL DE CONFIRMAÇÃO DE DELEÇÃO */}
       {deleteConfirmId && (
