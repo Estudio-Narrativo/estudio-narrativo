@@ -523,7 +523,7 @@ export default function EstudioApp() {
                 Cancelar
               </button>
               <button
-                onClick={executeDeleteBook}
+                onClick={() => executeDeleteBook(bookId)}
                 className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-medium rounded-lg"
               >
                 Excluir
