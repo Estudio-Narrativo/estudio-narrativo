@@ -265,7 +265,7 @@ export default function EstudioApp() {
     </div>
   );
 }
-{
+  {
     id: 'tendencias',
     title: 'Gêneros & Mercado Editorial',
     icon: TrendingUp,
