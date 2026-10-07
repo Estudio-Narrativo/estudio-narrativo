@@ -1067,11 +1067,13 @@ export default function EstudioApp() {
             </div>
 
           </div>
-        </div>
 
-<DeleteConfirmationModal
-  isOpen={Boolean(deleteConfirmId)}
-  onClose={() => setDeleteConfirmId(null)}
-  onConfirm={() => handleDeleteBook(deleteConfirmId)}
-  theme={theme}
-/>
+    {/* DeleteConfirmationModal */}
+    <DeleteConfirmationModal
+      isOpen={Boolean(deleteConfirmId)}
+      onClose={() => setDeleteConfirmId(null)}
+      onConfirm={() => handleDeleteBook(deleteConfirmId)}
+      theme={theme}
+    />
+  </div>
+);
