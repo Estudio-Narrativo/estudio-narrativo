@@ -1082,7 +1082,7 @@ export default function EstudioApp() {
         theme={theme}
       />
     </div>
-  )};
+  )}
 }
 
 export default App;
