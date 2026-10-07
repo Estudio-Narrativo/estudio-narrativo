@@ -1065,15 +1065,16 @@ export default function EstudioApp() {
                 Próxima <ChevronRight className="w-4 h-4"/>
               </button>
             </div>
+        </div>
+      </div>
 
-          </div>
-
-    {/* DeleteConfirmationModal */}
-    <DeleteConfirmationModal
-      isOpen={Boolean(deleteConfirmId)}
-      onClose={() => setDeleteConfirmId(null)}
-      onConfirm={() => handleDeleteBook(deleteConfirmId)}
-      theme={theme}
-    />
-  </div>
-);
+      {/* DeleteConfirmationModal */}
+      <DeleteConfirmationModal
+        isOpen={Boolean(deleteConfirmId)}
+        onClose={() => setDeleteConfirmId(null)}
+        onConfirm={() => handleDeleteBook(deleteConfirmId)}
+        theme={theme}
+      />
+    </div>
+  );
+}
