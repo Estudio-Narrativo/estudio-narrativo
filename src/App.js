@@ -1072,11 +1072,9 @@ export default function EstudioApp() {
                 <span>Próxima</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
-            </div>
-          </div>
         </div>
+      </div>
 
-      {/* DeleteConfirmationModal */}
       <DeleteConfirmationModal
         isOpen={Boolean(deleteConfirmId)}
         onClose={() => setDeleteConfirmId(null)}
