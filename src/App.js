@@ -1099,15 +1099,3 @@ export default function EstudioApp() {
         </div>
       )}
 
-      {/* --- TOAST NOTIFICATION --- */}
-      {toast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white px-4 py-3 rounded-xl flex items-center gap-2 shadow-lg">
-          <Check className="w-4 h-4" />
-          {toast}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default App;
