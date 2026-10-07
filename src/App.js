@@ -1068,7 +1068,6 @@ export default function EstudioApp() {
 
           </div>
         </div>
-      )}
 
 <DeleteConfirmationModal
   isOpen={Boolean(deleteConfirmId)}
