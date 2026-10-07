@@ -1068,29 +1068,24 @@ export default function EstudioApp() {
         </div>
       )}
 
-{/* --- MODAL: CONFIRMAÇÃO DE DELEÇÃO --- */}
+{/* Modal de Confirmação de Exclusão */}
       {deleteConfirmId && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className={`p-6 rounded-2xl border max-w-sm w-full ${
-            isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-          }`}>
-            <div className="flex items-center gap-3 text-red-500 mb-3">
-              <AlertTriangle className="w-6 h-6" />
-              <h3 className="font-bold text-lg">Confirmar exclusão</h3>
-            </div>
-            <p className="text-sm text-slate-400 mb-6">
-              Tem certeza que deseja excluir este manuscrito?
+          <div className={`max-w-md w-full border rounded-2xl p-6 shadow-xl ${theme === 'dark' ? 'border-slate-800 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white text-slate-900'}`}>
+            <h3 className="font-bold text-lg mb-2">Confirmar Exclusão</h3>
+            <p className={`text-sm mb-6 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+              Tem certeza de que deseja excluir este manuscrito? Esta ação não pode ser desfeita.
             </p>
-            <div className="flex items-center justify-end gap-3">
-              <button
+            <div className="flex justify-end gap-3">
+              <button 
                 onClick={() => setDeleteConfirmId(null)}
-                className="px-4 py-2 rounded-xl text-sm font-medium hover:bg-slate-800"
+                className={`px-4 py-2 rounded-xl text-sm font-medium border ${theme === 'dark' ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'}`}
               >
                 Cancelar
               </button>
-              <button
-                onClick={executeDeleteBook}
-                className="px-4 py-2 rounded-xl text-sm font-medium bg-red-600 hover:bg-red-700 text-white"
+              <button 
+                onClick={() => handleDeleteBook(deleteConfirmId)}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-red-600 hover:bg-red-500 text-white shadow-md"
               >
                 Excluir
               </button>
@@ -1098,4 +1093,4 @@ export default function EstudioApp() {
           </div>
         </div>
       )}
-
+  
