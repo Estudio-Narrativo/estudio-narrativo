@@ -1046,29 +1046,37 @@ export default function EstudioApp() {
             </div>
 
             {/* NAVEGAÇÃO DE PÁGINAS */}
-            <div className="p-4 border-t border-slate-800/40 flex items-center justify-between text-xs">
+            <div className={`p-4 border-t flex items-center justify-between text-xs ${
+              theme === 'dark' ? 'border-slate-800/40' : 'border-slate-200'
+            }`}>
               <button
+                type="button"
                 disabled={currentPageIndex === 0}
                 onClick={() => setCurrentPageIndex(p => Math.max(0, p - 1))}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-800/20"
               >
-                <ChevronLeft className="w-4 h-4"/> Anterior
+                <ChevronLeft className="w-4 h-4" />
+                <span>Anterior</span>
               </button>
 
-              <span>Página {currentPageIndex + 1} de {pages.length}</span>
+              <span>
+                Página {currentPageIndex + 1} de {pages.length || 1}
+              </span>
 
               <button
+                type="button"
                 disabled={currentPageIndex >= pages.length - 1}
                 onClick={() => setCurrentPageIndex(p => Math.min(pages.length - 1, p + 1))}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-800/20"
               >
-                Próxima <ChevronRight className="w-4 h-4"/>
+                <span>Próxima</span>
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
+          </div>
         </div>
-      </div>
 
-      {/* DeleteConfirmationModal */},
+      {/* DeleteConfirmationModal */}
       <DeleteConfirmationModal
         isOpen={Boolean(deleteConfirmId)}
         onClose={() => setDeleteConfirmId(null)}
