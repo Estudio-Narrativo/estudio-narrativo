@@ -1100,4 +1100,4 @@ export default function EstudioApp() {
           </div>
         </div>
       )};
-
+}
