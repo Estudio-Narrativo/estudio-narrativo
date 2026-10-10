@@ -1045,6 +1045,18 @@ export default function EstudioApp() {
               {pages[currentPageIndex]}
             </div>
 
+const confirmDelete = async () => {
+  if (deleteConfirmId == null) return;
+
+  try {
+    await handleDeleteBook(deleteConfirmId);
+    setDeleteConfirmId(null);
+  } catch (error) {
+    console.error("Erro ao excluir manuscrito:", error);
+  }
+};
+
+
             {/* NAVEGAÇÃO DE PÁGINAS */}
             <div className={`p-4 border-t flex items-center justify-between text-xs ${
               theme === 'dark' ? 'border-slate-800/40' : 'border-slate-200'
