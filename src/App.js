@@ -1,1161 +1,966 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { 
-  Edit3, FileText, Plus, Moon, Sun, 
-  X, Feather, Menu, FileUp,
-  GraduationCap, Compass, Users, Lightbulb, TrendingUp, Search,
-  Trash2, Download, Upload, ChevronLeft, ChevronRight, Check, AlertTriangle, BookOpen
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  BookOpen, Edit3, Plus, Moon, Sun,
+  Sparkles, X, Feather, Menu, MessageSquare, Users,
+  UserPlus, Send, MessageCircle, User, Save,
+  Award, BarChart2, RotateCcw
 } from 'lucide-react';
-
-import { DeleteConfirmationModal } from './DeleteConfirmationModal';
-
-// --- BANCO DE DADOS INDEXEDDB ASSÍNCRONO (GERENCIAMENTO ROBUSTO) ---
-
-const DB_NAME = 'EstudioNarrativoDB';
-const DB_VERSION = 1;
-let dbInstance = null;
-
-const getDB = () => {
-  if (dbInstance) return Promise.resolve(dbInstance);
-
-  return new Promise((resolve, reject) => {
-    if (typeof window === 'undefined' || !window.indexedDB) {
-      reject(new Error('IndexedDB não suportado neste ambiente.'));
-      return;
-    }
-
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onerror = (e) => {
-      reject(`Erro ao abrir IndexedDB: ${e.target.error}`);
-    };
-
-    request.onsuccess = () => {
-      dbInstance = request.result;
-      dbInstance.onversionchange = () => {
-        dbInstance.close();
-        dbInstance = null;
-      };
-      dbInstance.onclose = () => {
-        dbInstance = null;
-      };
-      resolve(dbInstance);
-    };
-
-    request.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings');
-      if (!db.objectStoreNames.contains('books')) db.createObjectStore('books', { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('documents')) db.createObjectStore('documents', { keyPath: 'id' });
-    };
-  });
-};
-
-const dbGet = async (storeName, key) => {
-  try {
-    const db = await getDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(storeName, 'readonly');
-      const store = tx.objectStore(storeName);
-      const req = key ? store.get(key) : store.getAll();
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
-    });
-  } catch {
-    return null;
-  }
-};
-
-const dbSet = async (storeName, val, key) => {
-  try {
-    const db = await getDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readwrite');
-      tx.onabort = () => reject(false);
-      const store = tx.objectStore(storeName);
-      const req = key ? store.put(val, key) : store.put(val);
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => reject(false);
-    });
-  } catch (e) {
-    console.error('Erro na gravação do IndexedDB:', e);
-    return false;
-  }
-};
-
-const dbDelete = async (storeName, key) => {
-  try {
-    const db = await getDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(storeName, 'readwrite');
-      const store = tx.objectStore(storeName);
-      const req = store.delete(key);
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => resolve(false);
-    });
-  } catch {
-    return false;
-  }
-};
-
-// --- HELPERS E UTILITÁRIOS SEGUROS ---
-
-const calculateWords = (text = '') => {
-  if (!text || typeof text !== 'string') return 0;
-  const cleanText = text.trim();
-  return cleanText ? (cleanText.match(/\S+/g) || []).length : 0;
-};
-
-const triggerSecureDownload = (content, filename, type) => {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-};
-
-const sanitizeInput = (str = '') => {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-    .replace(/[\0\x08\x0B\x0C\x0E-\x1F]/g, '')
-    .trim();
-};
-
-// --- DADOS INICIAIS DA APLICAÇÃO ---
 
 const LIVROS_INICIAIS = [
   {
     id: 'b1',
     title: 'A Sombra do Tempo',
-    author: 'Alexandre Sousa',
     genre: 'Ficção Científica',
     coverColor: 'from-purple-600 to-indigo-800',
-    synopsis: 'Uma jornada através das fendas temporais da Via Láctea, onde o passado e o futuro colidem em uma estação espacial abandonada.',
-    content: `Capítulo 1: O Despertar\n\nO silêncio na estação espacial era quase ensurdecedor. Lucas olhou através da janela de quartzo e observou as estrelas distantes se contorcendo na dobra espacial.\n\n"Tudo pronto para o salto?", perguntou a inteligência artificial da nave, sua voz ecoando suavemente pelo painel de controle.\n\nA poeira estelar cobria a fiação do módulo principal. Nada naquelas coordenadas batia com os mapas galácticos antigos. Precisamos calibrar o reator secundário antes de avançar, alertou Lucas, ajustando as chaves do console.\n\nCapítulo 2: O Sinal\n\nUm bipe estridente cortou o ar estático do convés de comando. O painel holográfico piscou em carmesim.\n\n"Detectando emissão de táquions a 400 milhas náuticas", anunciou a IA. "Assinatura idêntica à nave de reconhecimento perdida há quarenta anos."`
+    progress: 68,
+    status: 'Em Andamento',
+    updatedAt: '2026-03-28',
+    wordCount: 18450,
+    synopsis: 'Uma jornada através das fendas temporais da Via Láctea, onde o passado e o futuro se colidem em uma estação espacial abandonada.',
+    chapters: [
+      {
+        id: 'c1',
+        title: 'Capítulo 1: O Despertar',
+        content: '# Capítulo 1: O Despertar\n\nO silêncio na estação espacial era quase ensurdecedor. Lucas olhou através da janela de quartzo e observou as estrelas distantes se contorcendo na dobra espacial.\n\n"Tudo pronto para o salto?", perguntou a inteligência artificial da nave, sua voz ecoando suavemente pelo painel de controle.',
+        comments: [
+          { id: 'cm1', author: 'Mariana Lima', text: 'Início fantástico! Adorei a atmosfera de suspense.', date: '2026-03-29' },
+          { id: 'cm2', author: 'Carlos Ramos', text: 'A descrição da dobra espacial ficou impecável.', date: '2026-03-30' }
+        ]
+      },
+      {
+        id: 'c2',
+        title: 'Capítulo 2: Fronteiras Invisíveis',
+        content: '# Capítulo 2: Fronteiras Invisíveis\n\nA poeira estelar cobria a fiação do módulo principal. Nada naquelas coordenadas batia com os mapas galácticos antigos.\n\n"Precisamos calibrar o reator secundário antes de avançar," alertou Lucas, ajustando as chaves do console.',
+        comments: []
+      }
+    ],
+    characters: [
+      { id: 'ch1', name: 'Lucas Vance', role: 'Protagonista', description: 'Engenheiro de salto espacial, 34 anos.' }
+    ],
+    notes: []
+  },
+  {
+    id: 'b2',
+    title: 'Manual do Escritor Moderno',
+    genre: 'Não-Ficção / Guia',
+    coverColor: 'from-amber-500 to-rose-700',
+    progress: 35,
+    status: 'Rascunho',
+    updatedAt: '2026-04-01',
+    wordCount: 6200,
+    synopsis: 'Técnicas essenciais de estruturação narrativa e produtividade para autores independentes.',
+    chapters: [
+      {
+        id: 'c101',
+        title: 'Introdução à Estrutura',
+        content: '# Introdução\n\nEscrever um livro exige mais do que inspiração momentânea; exige consistência e método.',
+        comments: []
+      }
+    ],
+    characters: [],
+    notes: []
   }
 ];
 
-const PDFS_INICIAIS = [
-  {
-    id: 'doc_1',
-    title: 'Manual de Escrita Criativa',
-    fileName: 'manual_escrita.txt',
-    size: '1.2 KB',
-    uploadedAt: '2026-03-20',
-    content: `A Estrutura Narrativa e a Arte de Contar Histórias\n\nA estrutura de três atos é um modelo utilizado na escrita dramática que divide uma história em três partes fundamentais: Exposição, Confronto e Resolução.\n\nNo Primeiro Ato, o universo e os personagens são apresentados. O incidente incitante rompe o equilíbrio do protagonista, forçando-o a tomar uma decisão transformadora.\n\nNo Segundo Ato, os obstáculos se multiplicam. O protagonista enfrenta provações e derrotas temporárias, culminando no ponto de maior tensão ou crise da jornada.\n\nNo Terceiro Ato, ocorre o clímax: o confronto final onde os dilemas centrais da história são resolvidos. Em seguida, a narrativa se encerra com a consolidação de um novo equilíbrio.`
-  }
+// pendingRequest = solicitação RECEBIDA (posso aceitar)
+// requestSent    = solicitação ENVIADA por mim (aguardando resposta)
+const AMIGOS_INICIAIS = [
+  { id: 'u1', name: 'Mariana Lima', handle: '@marilima', status: 'online', isFriend: true },
+  { id: 'u2', name: 'Carlos Ramos', handle: '@carlos_writer', status: 'offline', isFriend: true },
+  { id: 'u3', name: 'Beatriz Costa', handle: '@biacosta', status: 'online', isFriend: false, pendingRequest: true, requestSent: false },
+  { id: 'u4', name: 'Gabriel Mendes', handle: '@gmendes', status: 'offline', isFriend: false, pendingRequest: false, requestSent: false }
 ];
 
-const APRENDIZAGEM_CONTEUDO = [
-  {
-    id: 'estruturas',
-    title: 'Construção & Estruturas',
-    icon: Compass,
-    description: 'Modelos de arquitetura narrativa, controle de ritmo e métodos de expansão de enredo.',
-    lessons: [
-      {
-        subtitle: 'Estrutura de 3 Atos',
-        tag: 'Arquitetura',
-        details: 'Divide a narrativa em Exposição (Incidente Incitante), Confronto (Pontos de Virada, Midpoint e Crise) e Resolução (Clímax e Novo Equilíbrio). Garante clareza e ritmo estruturado.'
-      },
-      {
-        subtitle: 'Jornada do Herói (Monomito)',
-        tag: 'Mito / Fantasia',
-        details: 'Os 12 estágios consagrados por Joseph Campbell e Christopher Vogler: do Mundo Comum ao Retorno com o Elixir, passando pelo Chamado, Provações e a Ordalização.'
-      },
-      {
-        subtitle: 'Método Snowflake (Floco de Neve)',
-        tag: 'Planejamento',
-        details: 'Desenvolvido por Randy Ingermanson. Comece construindo uma única frase explicativa e expanda sistematicamente para um parágrafo, fichas de personagens e, por fim, a escaleta detalhada.'
-      },
-      {
-        subtitle: 'Ritmo & Tensão (Pacing)',
-        tag: 'Técnica',
-        details: 'Alternância estratégica entre Cenas de Ação (objetivo, conflito, desastre) e Sequências de Reflexão (reação, dilema, decisão) para manter o leitor engajado sem causar exaustão.'
-      }
-    ]
-  },
-  {
-    id: 'personagens',
-    title: 'Desenvolvimento de Personagens',
-    icon: Users,
-    description: 'Psicologia dos personagens, motivações profundas, arquétipos e tipos funcionais.',
-    lessons: [
-      {
-        subtitle: 'A Ficha de Personagem Profunda',
-        tag: 'Psicologia',
-        details: 'Equilibre o Desejo Consciente (Want) com a Necessidade Inconsciente (Need). Defina a Ferida Primária (Ghost/Wound), a Mentira (The Lie) em que ele acredita e determine o Arco (Positivo, Negativo ou Estático).'
-      },
-      {
-        subtitle: 'Tipos & Papéis Funcionais',
-        tag: 'Elenco',
-        details: 'Como escalar e equilibrar: Protagonista (motor da ação), Antagonista (força de oposição), Mentor, Coadjuvantes, Alívio Cômico, Camaleão e a Sombra.'
-      },
-      {
-        subtitle: 'Arquétipos Junguianos na Literatura',
-        tag: 'Teoria',
-        details: 'Padrões universais do inconsciente coletivo: O Herói, O Sábio, O Rebelde, O Governança, O Criador, O Cuidador, O Inocente e O Amante.'
-      }
-    ]
-  },
-  {
-    id: 'definicoes',
-    title: 'Tipos, POV & Worldbuilding',
-    icon: Lightbulb,
-    description: 'Perspectivas narrativas, regras de construção de mundo e técnicas de prosa.',
-    lessons: [
-      {
-        subtitle: 'Foco Narrativo / Ponto de Vista (POV)',
-        tag: 'Perspectiva',
-        details: '1ª Pessoa (íntima e visceral, com foco em narradores não confiáveis), 3ª Pessoa Limitada (imersão focada em um único personagem por cena) e 3ª Pessoa Onisciente (visão panorâmica e editorial).'
-      },
-      {
-        subtitle: 'Construção de Mundo (Worldbuilding)',
-        tag: 'Ambientação',
-        details: 'Aplicações práticas das Leis de Sanderson para Sistemas de Magia (Duros vs. Macios), consistência geopolítica, aspectos socioculturais e atmosfera.'
-      },
-      {
-        subtitle: 'Show, Don\'t Tell (Mostre, Não Conte)',
-        tag: 'Escrita',
-        details: 'Demonstre emoções e intenções através de sensações viscerais, linguagem corporal e ações concretas em vez de resumos expositivos explícitos.'
-      }
-    ]
-  },
-  {
-    id: 'tendencias',
-    title: 'Gêneros & Mercado Editorial',
-    icon: TrendingUp,
-    description: 'Análise de gêneros em alta, nichos de leitores e publicação moderna.',
-    lessons: [
-      {
-        subtitle: 'Fantasia & Romantasy',
-        tag: 'Tendência Mercado',
-        details: 'O fenômeno do Romantasy (subgêneros de fantasia com forte foco em romance e tensão interpessoal), High Fantasy e Urban Fantasy no mercado contemporâneo.'
-      },
-      {
-        subtitle: 'Thriller & Ficção Policial',
-        tag: 'Gênero',
-        details: 'Técnicas de mistérios de quarto fechado (locked-room), procedurais investigativos, thrillers psicológicos e a construção de Plot Twists memoráveis.'
-      },
-      {
-        subtitle: 'Ficção Científica (Sci-Fi)',
-        tag: 'Gênero',
-        details: 'Especificidades entre Cyberpunk, Space Opera, Solarpunk e Sci-Fi Hard (baseado em rigor científico).'
-      },
-      {
-        subtitle: 'Mercado Digital & Autopublicação',
-        tag: 'Carreira',
-        details: 'Estratégias para Amazon Kindle Direct Publishing (KDP), otimização de metadados, capas atrativas e construção de comunidade de leitores.'
-      }
-    ]
-  }
+const MENSAGENS_INICIAIS = {
+  'u1': [
+    { id: 'm1', sender: 'u1', text: 'Olá! Li o primeiro capítulo de "A Sombra do Tempo", ficou incrível!', time: '10:30' },
+    { id: 'm2', sender: 'me', text: 'Muito obrigado, Mariana! Estou revisando o segundo capítulo agora.', time: '10:32' }
+  ],
+  'u2': [
+    { id: 'm3', sender: 'u2', text: 'Você aceita fazer uma leitura crítica do meu novo conto?', time: 'Ontem' }
+  ]
+};
+
+const PERFIL_INICIAL = {
+  name: 'Alexandre Souza',
+  handle: '@alex_autor',
+  bio: 'Escritor de ficção científica e fantasia sombria. Explorando mundos distantes e narrativas complexas.',
+  favoriteGenre: 'Ficção Científica',
+  joinedDate: 'Março de 2026',
+  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
+};
+
+const NAV_ITEMS = [
+  { id: 'dashboard', label: 'Estante Virtual', icon: BookOpen },
+  { id: 'editor', label: 'Estúdio de Escrita', icon: Edit3 },
+  { id: 'social', label: 'Social & Amigos', icon: Users },
+  { id: 'profile', label: 'Meu Perfil', icon: User }
 ];
 
-// --- COMPONENTE PRINCIPAL ---
+const PAGE_TITLES = {
+  dashboard: 'Estante Virtual & Visão Geral',
+  editor: 'Estúdio de Escrita',
+  social: 'Comunidade & Mensagens',
+  profile: 'Perfil do Autor'
+};
 
-export default function EstudioApp() {
-  const [theme, setTheme] = useState('dark');
-  const [activeTab, setActiveTab] = useState('library');
+const STORAGE_KEYS = {
+  theme: 'estudio_theme',
+  profile: 'estudio_profile',
+  books: 'estudio_books',
+  friends: 'estudio_friends',
+  messages: 'estudio_messages'
+};
+
+// ---------- Helpers ----------
+
+// CORREÇÃO: além de try/catch, valida o formato dos dados salvos.
+// Dados corrompidos no localStorage (ex.: books não ser um array) derrubavam o app.
+const loadStorage = (key, fallback, isValid = () => true) => {
+  try {
+    const saved = localStorage.getItem(key);
+    if (!saved) return fallback;
+    const parsed = JSON.parse(saved);
+    return isValid(parsed) ? parsed : fallback;
+  } catch (e) {
+    console.error(`Erro ao carregar chave ${key} do LocalStorage`, e);
+    return fallback;
+  }
+};
+
+// CORREÇÃO: setItem também pode lançar erro (cota cheia, modo privado, etc.).
+const saveStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.error(`Erro ao salvar chave ${key} no LocalStorage`, e);
+  }
+};
+
+const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const isValidBooks = (v) => Array.isArray(v) && v.every(b => b && Array.isArray(b.chapters));
+
+// CORREÇÃO: toISOString() devolve a data em UTC. No Brasil (UTC-3), depois das 21h
+// a data "pulava" para o dia seguinte. Aqui usamos a data local.
+const todayISO = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+const formatNumber = (n) => (n || 0).toLocaleString('pt-BR');
+
+export default function App() {
+  // ---------- Estados ----------
+  const [theme, setTheme] = useState(() =>
+    loadStorage(STORAGE_KEYS.theme, 'dark', (v) => v === 'dark' || v === 'light')
+  );
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
 
-  // Estados dos Dados do Usuário
-  const [books, setBooks] = useState([]);
-  const [myPdfs, setMyPdfs] = useState([]);
-  
-  // Estado do Editor
-  const [selectedBookId, setSelectedBookId] = useState('');
-  const [saveStatus, setSaveStatus] = useState('salvo');
+  const [profile, setProfile] = useState(() => loadStorage(STORAGE_KEYS.profile, PERFIL_INICIAL, isPlainObject));
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [tempProfile, setTempProfile] = useState(PERFIL_INICIAL);
+  const [avatarError, setAvatarError] = useState(false);
 
-  // Modal de Confirmação de Deleção
-  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [books, setBooks] = useState(() => loadStorage(STORAGE_KEYS.books, LIVROS_INICIAIS, isValidBooks));
+  const [selectedBookId, setSelectedBookId] = useState(() => books[0]?.id || null);
+  const [selectedChapterId, setSelectedChapterId] = useState(() => books[0]?.chapters?.[0]?.id || null);
+  const [editorTab, setEditorTab] = useState('write');
 
-  // Estados da Central de Aprendizagem
-  const [selectedModule, setSelectedModule] = useState(APRENDIZAGEM_CONTEUDO[0].id);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [friends, setFriends] = useState(() => loadStorage(STORAGE_KEYS.friends, AMIGOS_INICIAIS, Array.isArray));
+  const [messages, setMessages] = useState(() => loadStorage(STORAGE_KEYS.messages, MENSAGENS_INICIAIS, isPlainObject));
+  const [selectedChatUserId, setSelectedChatUserId] = useState(() => friends.find(f => f.isFriend)?.id || null);
+  const [newMessageText, setNewMessageText] = useState('');
+  const [socialTab, setSocialTab] = useState('friends');
 
-  // Modais e Leitor
-  const [flipbookActive, setFlipbookActive] = useState(false);
-  const [flipbookBook, setFlipbookBook] = useState(null);
-  const [currentPageIndex, setCurrentPageIndex] = useState(0);
-  const [fontSize, setFontSize] = useState(16);
-
+  const [newCommentText, setNewCommentText] = useState('');
   const [toast, setToast] = useState(null);
-  const jsonFileInputRef = useRef(null);
-  const docFileInputRef = useRef(null);
-  const toastTimerRef = useRef(null);
-
-  const currentBookRef = useRef(null);
-
-  // Carregamento Inicial do IndexedDB
-  useEffect(() => {
-    let isMounted = true;
-    async function loadData() {
-      try {
-        const savedTheme = await dbGet('settings', 'theme');
-        if (savedTheme && isMounted) setTheme(savedTheme);
-
-        const savedBooks = await dbGet('books');
-        if (savedBooks && savedBooks.length > 0) {
-          if (isMounted) {
-            setBooks(savedBooks);
-            setSelectedBookId(savedBooks[0].id);
-          }
-        } else {
-          if (isMounted) {
-            setBooks(LIVROS_INICIAIS);
-            setSelectedBookId(LIVROS_INICIAIS[0].id);
-          }
-          for (const b of LIVROS_INICIAIS) {
-            await dbSet('books', b);
-          }
-        }
-
-        const savedPdfs = await dbGet('documents');
-        if (savedPdfs && savedPdfs.length > 0) {
-          if (isMounted) setMyPdfs(savedPdfs);
-        } else {
-          if (isMounted) setMyPdfs(PDFS_INICIAIS);
-          for (const d of PDFS_INICIAIS) {
-            await dbSet('documents', d);
-          }
-        }
-      } catch (err) {
-        console.error("Erro ao carregar dados do IndexedDB:", err);
-      } finally {
-        if (isMounted) setIsLoaded(true);
-      }
-    }
-    loadData();
-    return () => { 
-      isMounted = false;
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    };
-  }, []);
-
-  const currentBook = useMemo(() => {
-    return books.find(b => b.id === selectedBookId) || books[0] || { id: '', title: '', content: '', author: '', genre: '', synopsis: '' };
-  }, [books, selectedBookId]);
-
-  useEffect(() => {
-    currentBookRef.current = currentBook;
-  }, [currentBook]);
-
-  const currentBookWords = useMemo(() => {
-    return calculateWords(currentBook?.content || '');
-  }, [currentBook?.content]);
-
-  const showNotification = useCallback((msg) => {
-    setToast(msg);
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToast(null), 3000);
-  }, []);
-
-  // Persistência Assíncrona Otimizada
-  useEffect(() => {
-    if (!isLoaded || !selectedBookId) return;
-
-    const targetBook = books.find(b => b.id === selectedBookId);
-    if (!targetBook) return;
-
-    const handler = setTimeout(async () => {
-      setSaveStatus('salvando');
-      const success = await dbSet('books', targetBook);
-      setSaveStatus(success ? 'salvo' : 'erro');
-    }, 1000);
-
-    return () => clearTimeout(handler);
-  }, [books, selectedBookId, isLoaded]);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    dbSet('settings', theme, 'theme');
-  }, [theme, isLoaded]);
-
-  // Atalho de Teclado no Editor (Ctrl+S / Cmd+S)
-  useEffect(() => {
-    const handleGlobalKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        const activeBook = currentBookRef.current;
-        if (activeBook && activeBook.id) {
-          dbSet('books', activeBook);
-          setSaveStatus('salvo');
-          showNotification('Projeto salvo com sucesso!');
-        }
-      }
-    };
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [showNotification]);
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
-
-  const handleTitleChange = (newTitle) => {
-    setBooks(prev => prev.map(b => b.id === selectedBookId ? { ...b, title: newTitle } : b));
-  };
-
-  const handleContentChange = (newContent) => {
-    setBooks(prev => prev.map(b => b.id === selectedBookId ? { ...b, content: newContent } : b));
-  };
-
-  const handleCreateNewBook = () => {
-    const newBook = {
-      id: `b_${Date.now()}`,
-      title: 'Novo Manuscrito',
-      author: 'Autor',
-      genre: 'Geral',
-      coverColor: 'from-blue-600 to-indigo-800',
-      synopsis: 'Sem sinopse.',
-      content: ''
-    };
-    setBooks(prev => [newBook, ...prev]);
-    setSelectedBookId(newBook.id);
-    setActiveTab('editor');
-    showNotification('Novo manuscrito criado!');
-  };
-
-  const confirmDeleteBook = (id) => {
-    if (books.length <= 1) {
-      showNotification('Você deve manter ao menos um projeto ativo.');
-      return;
-    }
-    setDeleteConfirmId(id);
-  };
-
-  const executeDeleteBook = async () => {
-    if (!deleteConfirmId) return;
-    const id = deleteConfirmId;
-    const filtered = books.filter(b => b.id !== id);
-    setBooks(filtered);
-    await dbDelete('books', id);
-    if (selectedBookId === id && filtered.length > 0) {
-      setSelectedBookId(filtered[0].id);
-    }
-    setDeleteConfirmId(null);
-    showNotification('Projeto removido com sucesso.');
-  };
-
-  const handleExportJSON = (book) => {
-    const jsonString = JSON.stringify(book, null, 2);
-    const fileName = `${(book.title || 'projeto').toLowerCase().replace(/[^a-z0-9]/g, '_')}.json`;
-    triggerSecureDownload(jsonString, fileName, 'application/json');
-    showNotification('Projeto exportado em JSON!');
-  };
-
-  const handleExportTXT = (book) => {
-    const textContent = `${book.title}\n\n${book.content}`;
-    const fileName = `${(book.title || 'manuscrito').toLowerCase().replace(/[^a-z0-9]/g, '_')}.txt`;
-    triggerSecureDownload(textContent, fileName, 'text/plain;charset=utf-8');
-    showNotification('Manuscrito baixado em TXT!');
-  };
-
-  const handleImportJSON = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (file.size > 10 * 1024 * 1024) {
-      showNotification('Erro: Arquivo excede o limite de 10MB.');
-      e.target.value = '';
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const imported = JSON.parse(event.target.result);
-        if (typeof imported !== 'object' || imported === null || !imported.title || imported.content === undefined) {
-          throw new Error('Formato inválido');
-        }
-        const newBook = {
-          id: `b_imp_${Date.now()}`,
-          title: sanitizeInput(String(imported.title || 'Projeto Importado')).slice(0, 100),
-          author: sanitizeInput(String(imported.author || 'Desconhecido')).slice(0, 80),
-          genre: sanitizeInput(String(imported.genre || 'Geral')).slice(0, 50),
-          coverColor: typeof imported.coverColor === 'string' ? imported.coverColor : 'from-indigo-600 to-purple-800',
-          synopsis: sanitizeInput(String(imported.synopsis || '')).slice(0, 500),
-          content: String(imported.content || '')
-        };
-        setBooks(prev => [newBook, ...prev]);
-        setSelectedBookId(newBook.id);
-        showNotification(`Projeto "${newBook.title}" importado!`);
-      } catch {
-        showNotification('Erro: Arquivo JSON de projeto inválido ou corrompido.');
-      }
-    };
-    reader.readAsText(file);
-    e.target.value
-
-    // Algoritmo Otimizado de Paginação do Leitor (Flipbook)
-  const pages = useMemo(() => {
-    if (!flipbookBook) return ['Sem conteúdo para exibição.'];
-    const fullText = flipbookBook.content || 'Conteúdo em branco.';
-    const paragraphs = fullText.split('\n');
-    const resultPages = [];
-    let currentPage = '';
-    const WORDS_PER_PAGE = 220;
-
-    for (let p of paragraphs) {
-      const pageWordCount = calculateWords(currentPage);
-      const paragraphWordCount = calculateWords(p);
-
-      if (pageWordCount + paragraphWordCount > WORDS_PER_PAGE && currentPage.length > 0) {
-        resultPages.push(currentPage.trim());
-        currentPage = p + '\n\n';
-      } else {
-        currentPage += p + '\n\n';
-      }
-    }
-
-    if (currentPage.trim().length > 0) {
-      resultPages.push(currentPage.trim());
-    }
-
-    return resultPages.length > 0 ? resultPages : ['Sem conteúdo para exibição.'];
-  }, [flipbookBook]);
-
-  const openFlipbook = (book) => {
-    setFlipbookBook(book);
-    setCurrentPageIndex(0);
-    setFlipbookActive(true);
-  };
-
-  const closeFlipbook = () => {
-    setFlipbookActive(false);
-    setFlipbookBook(null);
-  };
-
-  const filteredLessons = useMemo(() => {
-    const activeMod = APRENDIZAGEM_CONTEUDO.find(m => m.id === selectedModule) || APRENDIZAGEM_CONTEUDO[0];
-    if (!searchTerm.trim()) return activeMod.lessons;
-    
-    const term = searchTerm.toLowerCase();
-    return activeMod.lessons.filter(l => 
-      l.subtitle.toLowerCase().includes(term) || 
-      l.details.toLowerCase().includes(term) ||
-      l.tag.toLowerCase().includes(term)
-    );
-  }, [selectedModule, searchTerm]);
+  const toastTimer = useRef(null);
+  const chatScrollRef = useRef(null);
 
   const isDark = theme === 'dark';
 
+  // CORREÇÃO: o tema claro estava quebrado porque quase todas as classes eram fixas do tema escuro.
+  // Estes tokens dependem apenas do estado `theme` (não exigem configuração de darkMode no Tailwind).
+  const ui = isDark ? {
+    page: 'bg-slate-950 text-slate-100',
+    sidebar: 'bg-slate-900/90 border-slate-800',
+    header: 'bg-slate-900/40 border-slate-800',
+    panel: 'bg-slate-900/50 border-slate-800',
+    item: 'bg-slate-900/80 border-slate-800/60',
+    input: 'bg-slate-900 border-slate-800',
+    divider: 'border-slate-800',
+    title: 'text-white',
+    body: 'text-slate-300',
+    muted: 'text-slate-400',
+    faint: 'text-slate-500',
+    accent: 'text-indigo-400',
+    accentSoft: 'bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600 hover:text-white',
+    badge: 'bg-indigo-600/20 text-indigo-400',
+    avatar: 'bg-indigo-500/20 text-indigo-400',
+    navIdle: 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200',
+    tabIdle: 'text-slate-400 hover:text-slate-200',
+    resetBtn: 'text-slate-500 hover:text-rose-400 bg-slate-800/50 border-slate-800',
+    chatHeader: 'bg-slate-900/60',
+    chatItemIdle: 'bg-slate-900/40 text-slate-300 hover:bg-slate-800/50',
+    bubbleOther: 'bg-slate-800 text-slate-200'
+  } : {
+    page: 'bg-slate-50 text-slate-900',
+    sidebar: 'bg-white/90 border-slate-200',
+    header: 'bg-white border-slate-200',
+    panel: 'bg-white border-slate-200',
+    item: 'bg-slate-50 border-slate-200',
+    input: 'bg-white border-slate-300',
+    divider: 'border-slate-200',
+    title: 'text-slate-900',
+    body: 'text-slate-700',
+    muted: 'text-slate-600',
+    faint: 'text-slate-500',
+    accent: 'text-indigo-600',
+    accentSoft: 'bg-indigo-100 text-indigo-700 hover:bg-indigo-600 hover:text-white',
+    badge: 'bg-indigo-100 text-indigo-700',
+    avatar: 'bg-indigo-100 text-indigo-700',
+    navIdle: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+    tabIdle: 'text-slate-500 hover:text-slate-800',
+    resetBtn: 'text-slate-500 hover:text-rose-500 bg-slate-100 border-slate-200',
+    chatHeader: 'bg-slate-50',
+    chatItemIdle: 'bg-slate-100 text-slate-700 hover:bg-slate-200',
+    bubbleOther: 'bg-slate-200 text-slate-800'
+  };
+
+  const inputClass = `w-full px-3 py-2 border rounded-xl text-xs focus:outline-none focus:border-indigo-500 ${ui.input}`;
+  const labelClass = `text-xs block mb-1 ${ui.muted}`;
+
+  // ---------- Persistência ----------
+  useEffect(() => {
+    saveStorage(STORAGE_KEYS.theme, theme);
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }, [theme]);
+
+  useEffect(() => { saveStorage(STORAGE_KEYS.profile, profile); }, [profile]);
+  useEffect(() => { saveStorage(STORAGE_KEYS.books, books); }, [books]);
+  useEffect(() => { saveStorage(STORAGE_KEYS.friends, friends); }, [friends]);
+  useEffect(() => { saveStorage(STORAGE_KEYS.messages, messages); }, [messages]);
+
+  // Se a URL da foto mudar, tenta carregar de novo
+  useEffect(() => { setAvatarError(false); }, [profile.avatarUrl]);
+
+  // CORREÇÃO: vários avisos seguidos se cancelavam (o timer do primeiro apagava o segundo).
+  const showNotification = (msg) => {
+    setToast(msg);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 3000);
+  };
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+  // ---------- Valores derivados ----------
+  const currentBook = books.find(b => b.id === selectedBookId) || books[0] || null;
+  const currentChapter = currentBook?.chapters?.find(c => c.id === selectedChapterId) || currentBook?.chapters?.[0] || null;
+  // CORREÇÃO: só amigos confirmados podem ser abertos no chat
+  const selectedFriend = friends.find(f => f.id === selectedChatUserId && f.isFriend) || null;
+  const currentChatMessages = messages[selectedChatUserId] || [];
+
+  // CORREÇÃO: o chat não rolava até a mensagem mais recente
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [currentChatMessages.length, selectedChatUserId, activeTab, socialTab]);
+
+  // ---------- Ações: livros e capítulos ----------
+  const handleSelectBook = (bookId) => {
+    const targetBook = books.find(b => b.id === bookId);
+    setSelectedBookId(bookId);
+    setSelectedChapterId(targetBook?.chapters?.[0]?.id || null);
+    setActiveTab('editor');
+  };
+
+  const handleAddChapter = () => {
+    if (!currentBook) return;
+    const bookId = currentBook.id;
+    const newChapNum = (currentBook.chapters?.length || 0) + 1;
+    const newChapter = {
+      id: `c_${Date.now()}`,
+      title: `Capítulo ${newChapNum}: Sem Título`,
+      content: `# Capítulo ${newChapNum}\n\nEscreva seu texto aqui...`,
+      comments: []
+    };
+
+    setBooks(prev => prev.map(b =>
+      b.id === bookId ? { ...b, chapters: [...(b.chapters || []), newChapter] } : b
+    ));
+
+    setSelectedBookId(bookId);
+    setSelectedChapterId(newChapter.id);
+    showNotification('Novo capítulo adicionado!');
+  };
+
+  // CORREÇÃO: usa os ids do livro/capítulo que estão realmente na tela (currentBook/currentChapter).
+  // Antes usava selectedBookId/selectedChapterId, que podiam estar desatualizados
+  // (ex.: livro sem capítulos) e fazer a digitação não ser salva em lugar nenhum.
+  const updateChapterContent = (newContent) => {
+    if (!currentBook || !currentChapter) return;
+    const bookId = currentBook.id;
+    const chapterId = currentChapter.id;
+
+    setBooks(prev => prev.map(book => {
+      if (book.id !== bookId) return book;
+
+      const updatedChapters = book.chapters.map(chap =>
+        chap.id === chapterId ? { ...chap, content: newContent } : chap
+      );
+
+      const wordCount = updatedChapters.reduce((acc, chap) => {
+        const content = chap.content ? chap.content.trim() : '';
+        return acc + (content ? content.split(/\s+/).filter(Boolean).length : 0);
+      }, 0);
+
+      return { ...book, chapters: updatedChapters, wordCount, updatedAt: todayISO() };
+    }));
+  };
+
+  const handleAddComment = (e) => {
+    e.preventDefault();
+    if (!newCommentText.trim() || !currentBook || !currentChapter) return;
+    const bookId = currentBook.id;
+    const chapterId = currentChapter.id;
+
+    const commentObj = {
+      id: `cm_${Date.now()}`,
+      author: `${profile.name} (Autor)`,
+      text: newCommentText.trim(),
+      date: todayISO()
+    };
+
+    setBooks(prev => prev.map(book => {
+      if (book.id !== bookId) return book;
+      return {
+        ...book,
+        chapters: book.chapters.map(chap =>
+          chap.id === chapterId
+            ? { ...chap, comments: [...(chap.comments || []), commentObj] }
+            : chap
+        )
+      };
+    }));
+
+    setNewCommentText('');
+    showNotification('Comentário publicado com sucesso!');
+  };
+
+  // ---------- Ações: social ----------
+  const handleAcceptFriendRequest = (userId) => {
+    setFriends(prev => prev.map(u =>
+      u.id === userId ? { ...u, isFriend: true, pendingRequest: false, requestSent: false } : u
+    ));
+    showNotification('Solicitação de amizade aceita!');
+  };
+
+  // CORREÇÃO: antes marcava `pendingRequest: true`, o que fazia o botão "Aceitar" aparecer
+  // para uma solicitação que eu mesmo enviei. Agora usa `requestSent` e mostra "Pendente".
+  const handleSendFriendRequest = (userId) => {
+    setFriends(prev => prev.map(u => u.id === userId ? { ...u, requestSent: true } : u));
+    showNotification('Solicitação enviada!');
+  };
+
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    if (!newMessageText.trim() || !selectedFriend) return;
+    const chatUserId = selectedFriend.id;
+
+    const msgObj = {
+      id: `m_${Date.now()}`,
+      sender: 'me',
+      text: newMessageText.trim(),
+      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setMessages(prev => ({
+      ...prev,
+      [chatUserId]: [...(prev[chatUserId] || []), msgObj]
+    }));
+
+    setNewMessageText('');
+  };
+
+  // ---------- Ações: perfil ----------
+  const handleSaveProfile = (e) => {
+    e.preventDefault();
+    setProfile(tempProfile);
+    setIsEditingProfile(false);
+    showNotification('Perfil atualizado com sucesso!');
+  };
+
+  // CORREÇÃO: localStorage.clear() apagava TODAS as chaves da origem (inclusive de outros apps
+  // rodando em localhost). Além disso era inútil: os useEffect regravam os dados padrão logo depois.
+  // Agora só o estado é redefinido, e o tema escolhido é mantido.
+  const handleResetData = () => {
+    if (window.confirm('Deseja redefinir os dados para o padrão inicial? Suas edições atuais serão sobrescritas.')) {
+      setProfile(PERFIL_INICIAL);
+      setBooks(LIVROS_INICIAIS);
+      setFriends(AMIGOS_INICIAIS);
+      setMessages(MENSAGENS_INICIAIS);
+      setSelectedBookId(LIVROS_INICIAIS[0].id);
+      setSelectedChapterId(LIVROS_INICIAIS[0].chapters[0].id);
+      setSelectedChatUserId('u1');
+      setIsEditingProfile(false);
+      showNotification('Dados restaurados com sucesso!');
+    }
+  };
+
+  // ---------- Estatísticas ----------
+  const totalWords = books.reduce((acc, book) => acc + (book.wordCount || 0), 0);
+  const totalComments = books.reduce((acc, book) => {
+    return acc + (book.chapters || []).reduce((chapAcc, chap) => chapAcc + (chap.comments?.length || 0), 0);
+  }, 0);
+
+  const stats = [
+    { icon: BookOpen, value: books.length, label: 'Livros Criados' },
+    { icon: BarChart2, value: formatNumber(totalWords), label: 'Total de Palavras' },
+    { icon: Users, value: friends.filter(f => f.isFriend).length, label: 'Amigos Conectados' },
+    { icon: MessageSquare, value: totalComments, label: 'Comentários Recebidos' }
+  ];
+
   return (
-    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
-      
-      {/* HEADER / NAVBAR */}
-      <header className={`sticky top-0 z-30 border-b backdrop-blur-md ${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white/90 border-slate-200'}`}>
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className={`p-2 rounded-lg md:hidden ${isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}
-              aria-label="Toggle Menu"
-            >
-              <Menu className="w-5 h-5"/>
-            </button>
-            
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-500/30">
-                <Feather className="w-5 h-5"/>
-              </div>
-              <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
-                Estúdio Narrativo
-              </span>
-            </div>
-          </div>
+    <div className={`min-h-screen font-sans antialiased transition-colors duration-300 ${ui.page}`}>
 
-          {/* NAVEGAÇÃO DESKTOP */}
-          <nav className="hidden md:flex items-center gap-1 bg-slate-800/20 p-1 rounded-xl border border-slate-700/30">
-            <button
-              onClick={() => setActiveTab('library')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'library' 
-                  ? 'bg-indigo-600 text-white shadow-md' 
-                  : isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <BookOpen className="w-4 h-4"/>
-              Biblioteca
-            </button>
-
-            <button
-              onClick={() => setActiveTab('editor')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'editor' 
-                  ? 'bg-indigo-600 text-white shadow-md' 
-                  : isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Edit3 className="w-4 h-4"/>
-              Editor Pro
-            </button>
-
-            <button
-              onClick={() => setActiveTab('learning')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'learning' 
-                  ? 'bg-indigo-600 text-white shadow-md' 
-                  : isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <GraduationCap className="w-4 h-4"/>
-              Central de Aprendizado
-            </button>
-          </nav>
-
-         {/* CONTROLES / TEMA */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={toggleTheme}
-              className={`p-2 rounded-xl border transition-all ${
-                isDark 
-                  ? 'bg-slate-900 border-slate-800 text-amber-400 hover:bg-slate-800' 
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
-              title="Alternar Tema"
-            >
-              {isDark ? <Sun className="w-5 h-5"/> : <Moon className="w-5 h-5"/>}
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* MOBILE SIDEBAR MENU */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-40 md:hidden flex">
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
-          <div className={`relative w-64 max-w-xs flex-1 flex flex-col py-6 px-4 shadow-xl ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-800'}`}>
-            <div className="flex items-center justify-between mb-8">
-              <span className="font-bold text-lg text-indigo-500">Navegação</span>
-              <button onClick={() => setSidebarOpen(false)} className="p-1 rounded-lg hover:bg-slate-800/20">
-                <X className="w-6 h-6"/>
-              </button>
-            </div>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => { setActiveTab('library'); setSidebarOpen(false); }}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium ${activeTab === 'library' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800/10'}`}
-              >
-                <BookOpen className="w-5 h-5"/> Biblioteca
-              </button>
-              <button
-                onClick={() => { setActiveTab('editor'); setSidebarOpen(false); }}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium ${activeTab === 'editor' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800/10'}`}
-              >
-                <Edit3 className="w-5 h-5"/> Editor Pro
-              </button>
-              <button
-                onClick={() => { setActiveTab('learning'); setSidebarOpen(false); }}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium ${activeTab === 'learning' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800/10'}`}
-              >
-                <GraduationCap className="w-5 h-5"/> Central de Aprendizado
-              </button>
-            </div>
-          </div>
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 border border-indigo-400/30">
+          <Sparkles className="w-5 h-5 text-amber-300" />
+          <span className="text-sm font-medium">{toast}</span>
         </div>
       )}
 
-      {/* ÁREA DE CONTEÚDO PRINCIPAL */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6">
-        
-        {/* --- TAB 1: BIBLIOTECA --- */}
-        {activeTab === 'library' && (
-          <div className="space-y-8 animate-fadeIn">
-            
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-6">
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Sua Estante Digital</h1>
-                <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Gerencie seus manuscritos e documentos de estudo localmente.
-                </p>
-              </div>
+      <div className="flex h-screen overflow-hidden">
 
-              <div className="flex flex-wrap items-center gap-3">
-                <input 
-                  type="file" 
-                  ref={jsonFileInputRef} 
-                  onChange={handleImportJSON} 
-                  accept=".json" 
-                  className="hidden" 
-                />
-                <button
-                  onClick={() => jsonFileInputRef.current?.click()}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
-                    isDark ? 'border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                  }`}
-                >
-                  <Upload className="w-4 h-4 text-indigo-400"/>
-                  Importar Projeto JSON
-                </button>
+        {/* Mobile Overlay */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
 
-                <button
-                  onClick={handleCreateNewBook}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium shadow-lg shadow-indigo-600/30 transition-all"
-                >
-                  <Plus className="w-4 h-4"/>
-                  Novo Manuscrito
-                </button>
+        {/* Sidebar Menu */}
+        <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 ${ui.sidebar} border-r backdrop-blur-md flex flex-col justify-between transition-transform duration-300 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        }`}>
+          <div>
+            <div className="p-6 flex items-center justify-between border-b border-slate-800/20">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/30">
+                  <Feather className="w-6 h-6" />
+                </div>
+                <div>
+                  <h1 className="font-bold text-base leading-none tracking-tight">Estúdio do Autor</h1>
+                  <span className={`text-[10px] font-medium tracking-wide uppercase ${ui.accent}`}>Comunidade & Escrita</span>
+                </div>
               </div>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                aria-label="Fechar menu"
+                className={`lg:hidden ${ui.muted} hover:text-indigo-500`}
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            {/* SEÇÃO: MEUS MANUSCRITOS */}
-            <div>
-              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <Feather className="w-5 h-5 text-indigo-500"/>
-                Manuscritos Ativos ({books.length})
-              </h2>
+            <nav className="p-4 space-y-1.5">
+              {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                    activeTab === id
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : ui.navIdle
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </nav>
+          </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {books.map((book) => (
-                  <div
-                    key={book.id}
-                    className={`group relative rounded-2xl border p-5 flex flex-col justify-between transition-all duration-200 hover:shadow-xl ${
-                      isDark ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
+          <div className="p-4 border-t border-slate-800/20">
+            <div className="flex items-center justify-between">
+              <span className={`text-xs font-medium ${ui.muted}`}>Tema do Sistema</span>
+              <button
+                onClick={() => setTheme(isDark ? 'light' : 'dark')}
+                aria-label={isDark ? 'Ativar tema claro' : 'Ativar tema escuro'}
+                className={`p-2 rounded-xl transition-all ${
+                  isDark ? 'bg-slate-800 text-amber-400 hover:bg-slate-700' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                }`}
+              >
+                {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Content */}
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+          <header className={`h-16 px-6 flex items-center justify-between border-b ${ui.header}`}>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Abrir menu"
+                className={`lg:hidden p-2 rounded-lg hover:bg-slate-500/10 ${ui.muted}`}
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                {PAGE_TITLES[activeTab]}
+              </h2>
+            </div>
+          </header>
+
+          <div className="flex-1 overflow-y-auto p-6">
+
+            {/* MEU PERFIL */}
+            {activeTab === 'profile' && (
+              <div className="max-w-4xl mx-auto space-y-6">
+                <div className={`p-6 rounded-2xl border flex flex-col md:flex-row items-center md:items-start gap-6 relative ${ui.panel}`}>
+                  {/* CORREÇÃO: se a URL da foto falhar, mostra a inicial do nome em vez de imagem quebrada */}
+                  {profile.avatarUrl && !avatarError ? (
+                    <img
+                      src={profile.avatarUrl}
+                      alt={profile.name}
+                      onError={() => setAvatarError(true)}
+                      className="w-24 h-24 rounded-full object-cover border-2 border-indigo-500 shadow-xl"
+                    />
+                  ) : (
+                    <div className={`w-24 h-24 rounded-full border-2 border-indigo-500 shadow-xl flex items-center justify-center text-3xl font-bold ${ui.avatar}`}>
+                      {profile.name?.charAt(0)}
+                    </div>
+                  )}
+
+                  <div className="flex-1 text-center md:text-left space-y-2">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-xl font-bold">{profile.name}</h3>
+                        <p className={`text-xs font-medium ${ui.accent}`}>{profile.handle}</p>
+                      </div>
+                      <div className="flex items-center gap-2 justify-center">
+                        <button
+                          onClick={() => {
+                            setTempProfile(profile);
+                            setIsEditingProfile(!isEditingProfile);
+                          }}
+                          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all border border-indigo-500/30 ${ui.accentSoft}`}
+                        >
+                          {isEditingProfile ? 'Cancelar' : 'Editar Perfil'}
+                        </button>
+                        <button
+                          onClick={handleResetData}
+                          title="Redefinir Dados de Demonstração"
+                          aria-label="Redefinir dados de demonstração"
+                          className={`p-2 rounded-xl border ${ui.resetBtn}`}
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className={`text-sm max-w-xl ${ui.body}`}>{profile.bio}</p>
+
+                    <div className={`flex flex-wrap justify-center md:justify-start gap-4 text-xs pt-2 ${ui.muted}`}>
+                      <span><strong>Gênero favorito:</strong> {profile.favoriteGenre}</span>
+                      <span>•</span>
+                      <span>Membro desde {profile.joinedDate}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Form de Edição */}
+                {isEditingProfile && (
+                  <form onSubmit={handleSaveProfile} className={`p-6 rounded-2xl border space-y-4 ${ui.panel}`}>
+                    <h4 className={`text-sm font-bold ${ui.accent}`}>Editar Informações Pessoais</h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className={labelClass}>Nome Completo</label>
+                        <input
+                          type="text"
+                          value={tempProfile.name}
+                          onChange={(e) => setTempProfile({ ...tempProfile, name: e.target.value })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Usuário (@handle)</label>
+                        <input
+                          type="text"
+                          value={tempProfile.handle}
+                          onChange={(e) => setTempProfile({ ...tempProfile, handle: e.target.value })}
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
+
                     <div>
-                      <div className={`h-32 rounded-xl bg-gradient-to-br ${book.coverColor || 'from-indigo-600 to-purple-800'} p-4 flex flex-col justify-between text-white shadow-inner mb-4`}>
-                        <span className="text-xs font-semibold uppercase tracking-wider bg-black/30 px-2 py-1 rounded-md w-fit backdrop-blur-sm">
-                          {book.genre || 'Geral'}
-                        </span>
+                      <label className={labelClass}>URL da Foto de Perfil</label>
+                      <input
+                        type="text"
+                        value={tempProfile.avatarUrl}
+                        onChange={(e) => setTempProfile({ ...tempProfile, avatarUrl: e.target.value })}
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Gênero Literário Favorito</label>
+                      <input
+                        type="text"
+                        value={tempProfile.favoriteGenre}
+                        onChange={(e) => setTempProfile({ ...tempProfile, favoriteGenre: e.target.value })}
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Biografia</label>
+                      <textarea
+                        rows="3"
+                        value={tempProfile.bio}
+                        onChange={(e) => setTempProfile({ ...tempProfile, bio: e.target.value })}
+                        className={`${inputClass} resize-none`}
+                      />
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button type="submit" className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700">
+                        <Save className="w-4 h-4" />
+                        Salvar Alterações
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Estatísticas */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {stats.map(({ icon: Icon, value, label }) => (
+                    <div key={label} className={`p-4 rounded-2xl border text-center ${ui.panel}`}>
+                      <Icon className={`w-5 h-5 mx-auto mb-1 ${ui.accent}`} />
+                      <span className="text-xl font-bold block">{value}</span>
+                      <span className={`text-[10px] uppercase ${ui.muted}`}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Obras */}
+                <div className={`p-6 rounded-2xl border space-y-4 ${ui.panel}`}>
+                  <h4 className={`text-sm font-bold flex items-center gap-2 ${ui.title}`}>
+                    <Award className={`w-4 h-4 ${ui.accent}`} />
+                    Obras Publicadas / Em Produção
+                  </h4>
+                  <div className="space-y-3">
+                    {books.map(book => (
+                      <div key={book.id} className={`p-3.5 rounded-xl border flex items-center justify-between ${ui.item}`}>
                         <div>
-                          <h3 className="font-bold text-lg leading-snug line-clamp-1">{book.title}</h3>
-                          <p className="text-xs text-white/80">{book.author}</p>
+                          <p className={`text-xs font-bold ${ui.title}`}>{book.title}</p>
+                          <p className={`text-[10px] ${ui.muted}`}>{book.genre} • {formatNumber(book.wordCount)} palavras</p>
+                        </div>
+                        <span className={`px-2.5 py-1 text-[10px] font-semibold rounded-lg ${ui.badge}`}>
+                          {book.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ESTÚDIO DE ESCRITA */}
+            {activeTab === 'editor' && (
+              currentBook ? (
+                <div className="flex flex-col h-full gap-4">
+                  <div className={`flex flex-wrap justify-between items-center p-3 rounded-xl border gap-3 ${ui.panel}`}>
+                    <div className="flex items-center gap-2">
+                      {/* CORREÇÃO: os selects mostram o livro/capítulo que está de fato em edição */}
+                      <select
+                        value={currentBook.id}
+                        onChange={(e) => handleSelectBook(e.target.value)}
+                        className={`border text-xs font-bold px-2.5 py-1.5 rounded-lg focus:outline-none ${ui.input} ${ui.accent}`}
+                      >
+                        {books.map(b => (
+                          <option key={b.id} value={b.id}>{b.title}</option>
+                        ))}
+                      </select>
+
+                      <span className={`text-xs ${ui.faint}`}>/</span>
+
+                      <select
+                        value={currentChapter?.id || ''}
+                        onChange={(e) => setSelectedChapterId(e.target.value)}
+                        className={`border text-xs font-medium px-2.5 py-1.5 rounded-lg focus:outline-none ${ui.input} ${ui.body}`}
+                      >
+                        {currentBook.chapters?.map(c => (
+                          <option key={c.id} value={c.id}>{c.title}</option>
+                        ))}
+                      </select>
+
+                      <button
+                        onClick={handleAddChapter}
+                        className={`p-1.5 rounded-lg transition-all ${ui.accentSoft}`}
+                        title="Adicionar Novo Capítulo"
+                        aria-label="Adicionar novo capítulo"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setEditorTab('write')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${editorTab === 'write' ? 'bg-indigo-600 text-white' : ui.tabIdle}`}
+                      >
+                        Escrita
+                      </button>
+                      <button
+                        onClick={() => setEditorTab('comments')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 ${editorTab === 'comments' ? 'bg-indigo-600 text-white' : ui.tabIdle}`}
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        Comentários ({currentChapter?.comments?.length || 0})
+                      </button>
+                    </div>
+                  </div>
+
+                  {editorTab === 'write' && (
+                    currentChapter ? (
+                      <textarea
+                        value={currentChapter.content || ''}
+                        onChange={(e) => updateChapterContent(e.target.value)}
+                        placeholder="Comece a escrever..."
+                        className={`w-full flex-1 p-6 rounded-2xl border focus:outline-none focus:border-indigo-500 resize-none font-mono text-sm leading-relaxed ${ui.panel}`}
+                      />
+                    ) : (
+                      <div className={`text-center py-12 text-sm ${ui.faint}`}>
+                        Este livro ainda não tem capítulos. Use o botão + para criar o primeiro.
+                      </div>
+                    )
+                  )}
+
+                  {editorTab === 'comments' && (
+                    <div className="flex flex-col h-full max-w-3xl mx-auto w-full space-y-6">
+                      <form onSubmit={handleAddComment} className="flex gap-3">
+                        <input
+                          type="text"
+                          placeholder="Deixe um comentário sobre este capítulo..."
+                          value={newCommentText}
+                          onChange={(e) => setNewCommentText(e.target.value)}
+                          className={`flex-1 px-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:border-indigo-500 ${ui.input}`}
+                        />
+                        <button type="submit" className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700">
+                          Publicar
+                        </button>
+                      </form>
+
+                      <div className="space-y-4 overflow-y-auto flex-1">
+                        {currentChapter?.comments && currentChapter.comments.length > 0 ? (
+                          currentChapter.comments.map(comment => (
+                            <div key={comment.id} className={`p-4 rounded-xl border space-y-1 ${ui.item}`}>
+                              <div className="flex justify-between items-center">
+                                <span className={`text-xs font-bold ${ui.accent}`}>{comment.author}</span>
+                                <span className={`text-[10px] ${ui.faint}`}>{comment.date}</span>
+                              </div>
+                              <p className={`text-sm ${ui.body}`}>{comment.text}</p>
+                            </div>
+                          ))
+                        ) : (
+                          <div className={`text-center py-12 text-sm ${ui.faint}`}>
+                            Nenhum comentário neste capítulo ainda.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className={`text-center py-12 ${ui.faint}`}>Nenhum livro selecionado.</div>
+              )
+            )}
+
+            {/* SOCIAL */}
+            {activeTab === 'social' && (
+              <div className="flex flex-col lg:flex-row h-full gap-6">
+                <div className={`w-full lg:w-80 rounded-2xl border p-4 flex flex-col gap-4 ${ui.panel}`}>
+                  <div className={`flex border-b pb-3 gap-2 ${ui.divider}`}>
+                    <button
+                      onClick={() => setSocialTab('friends')}
+                      className={`flex-1 py-1.5 text-xs font-semibold rounded-lg ${socialTab === 'friends' ? 'bg-indigo-600 text-white' : ui.tabIdle}`}
+                    >
+                      Amigos
+                    </button>
+                    <button
+                      onClick={() => setSocialTab('chat')}
+                      className={`flex-1 py-1.5 text-xs font-semibold rounded-lg ${socialTab === 'chat' ? 'bg-indigo-600 text-white' : ui.tabIdle}`}
+                    >
+                      Conversas
+                    </button>
+                  </div>
+
+                  {socialTab === 'friends' && (
+                    <div className="space-y-3 overflow-y-auto flex-1">
+                      <span className={`text-xs font-bold uppercase tracking-wider ${ui.muted}`}>Conexões</span>
+                      {friends.map(user => (
+                        <div key={user.id} className={`p-3 rounded-xl border flex items-center justify-between ${ui.item}`}>
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${ui.avatar}`}>
+                              {user.name.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold">{user.name}</p>
+                              <p className={`text-[10px] ${ui.faint}`}>{user.handle}</p>
+                            </div>
+                          </div>
+                          {user.isFriend ? (
+                            <button
+                              onClick={() => { setSelectedChatUserId(user.id); setSocialTab('chat'); }}
+                              aria-label={`Conversar com ${user.name}`}
+                              className={`p-1.5 ${ui.muted} hover:text-indigo-500`}
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                            </button>
+                          ) : user.pendingRequest ? (
+                            <button
+                              onClick={() => handleAcceptFriendRequest(user.id)}
+                              className="px-2 py-1 bg-emerald-600 text-white rounded-lg text-[10px] font-semibold"
+                            >
+                              Aceitar
+                            </button>
+                          ) : user.requestSent ? (
+                            <span className={`px-2 py-1 rounded-lg text-[10px] font-semibold ${ui.badge}`}>
+                              Pendente
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleSendFriendRequest(user.id)}
+                              aria-label={`Enviar solicitação de amizade para ${user.name}`}
+                              className={`p-1.5 rounded-lg hover:bg-indigo-600/20 ${ui.accent}`}
+                            >
+                              <UserPlus className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {socialTab === 'chat' && (
+                    <div className="space-y-2 overflow-y-auto flex-1">
+                      {friends.filter(f => f.isFriend).map(friend => (
+                        <button
+                          key={friend.id}
+                          onClick={() => setSelectedChatUserId(friend.id)}
+                          className={`w-full p-3 rounded-xl flex items-center gap-3 transition-all ${
+                            selectedChatUserId === friend.id ? 'bg-indigo-600 text-white' : ui.chatItemIdle
+                          }`}
+                        >
+                          <div className="w-8 h-8 rounded-full bg-slate-500/30 flex items-center justify-center text-xs font-bold">
+                            {friend.name.charAt(0)}
+                          </div>
+                          <div className="text-left">
+                            <p className="text-xs font-bold">{friend.name}</p>
+                            <p className="text-[10px] opacity-70">{friend.handle}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className={`flex-1 rounded-2xl border flex flex-col h-full overflow-hidden min-h-[300px] ${ui.panel}`}>
+                  {selectedFriend ? (
+                    <>
+                      <div className={`p-4 border-b flex items-center gap-3 ${ui.divider} ${ui.chatHeader}`}>
+                        <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">
+                          {selectedFriend.name.charAt(0)}
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold">{selectedFriend.name}</h3>
+                          {/* CORREÇÃO: "offline" aparecia em verde, igual a "online" */}
+                          <span className={`text-[10px] ${selectedFriend.status === 'online' ? 'text-emerald-500' : ui.faint}`}>
+                            {selectedFriend.status === 'online' ? 'Online' : 'Offline'}
+                          </span>
                         </div>
                       </div>
 
-                      <p className={`text-xs line-clamp-3 mb-4 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                        {book.synopsis || 'Sem sinopse informada.'}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-800/50 text-xs">
-                      <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>
-                        {calculateWords(book.content)} palavras
-                      </span>
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => openFlipbook(book)}
-                          className="p-2 rounded-lg hover:bg-indigo-600/10 text-indigo-400 transition-colors"
-                          title="Ler no Flipbook"
-                        >
-                          <BookOpen className="w-4 h-4"/>
-                        </button>
-                        <button
-                          onClick={() => handleExportJSON(book)}
-                          className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 transition-colors"
-                          title="Exportar JSON"
-                        >
-                          <Download className="w-4 h-4"/>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedBookId(book.id);
-                            setActiveTab('editor');
-                          }}
-                          className="p-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
-                          title="Editar Manuscrito"
-                        >
-                          <Edit3 className="w-4 h-4"/>
-                        </button>
-                        <button
-                          onClick={() => confirmDeleteBook(book.id)}
-                          className="p-2 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors"
-                          title="Excluir"
-                        >
-                          <Trash2 className="w-4 h-4"/>
-                        </button>
+                      <div ref={chatScrollRef} className="flex-1 p-4 space-y-3 overflow-y-auto">
+                        {currentChatMessages.map(msg => (
+                          <div
+                            key={msg.id}
+                            className={`flex flex-col ${msg.sender === 'me' ? 'items-end' : 'items-start'}`}
+                          >
+                            <div className={`max-w-xs px-4 py-2.5 rounded-2xl text-xs ${
+                              msg.sender === 'me'
+                                ? 'bg-indigo-600 text-white rounded-br-none'
+                                : `${ui.bubbleOther} rounded-bl-none`
+                            }`}>
+                              {msg.text}
+                            </div>
+                            <span className={`text-[9px] mt-1 ${ui.faint}`}>{msg.time}</span>
+                          </div>
+                        ))}
                       </div>
+
+                      <form onSubmit={handleSendMessage} className={`p-3 border-t flex gap-2 ${ui.divider}`}>
+                        <input
+                          type="text"
+                          placeholder="Escreva uma mensagem..."
+                          value={newMessageText}
+                          onChange={(e) => setNewMessageText(e.target.value)}
+                          className={`flex-1 px-4 py-2 border rounded-xl text-xs focus:outline-none focus:border-indigo-500 ${ui.input}`}
+                        />
+                        <button
+                          type="submit"
+                          aria-label="Enviar mensagem"
+                          className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700"
+                        >
+                          <Send className="w-4 h-4" />
+                        </button>
+                      </form>
+                    </>
+                  ) : (
+                    <div className={`flex-1 flex items-center justify-center text-xs ${ui.faint}`}>
+                      Selecione um amigo para iniciar uma conversa.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ESTANTE VIRTUAL */}
+            {activeTab === 'dashboard' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {books.map(book => (
+                  <div key={book.id} className={`p-5 rounded-2xl border flex flex-col justify-between space-y-4 ${ui.panel}`}>
+                    <div>
+                      <span className={`text-[10px] uppercase font-bold ${ui.accent}`}>{book.genre}</span>
+                      <h3 className={`text-base font-bold mt-1 ${ui.title}`}>{book.title}</h3>
+                      <p className={`text-xs line-clamp-2 mt-2 ${ui.muted}`}>{book.synopsis}</p>
+                    </div>
+                    <div className={`flex justify-between items-center border-t pt-3 ${ui.divider}`}>
+                      <span className={`text-xs ${ui.faint}`}>{formatNumber(book.wordCount)} palavras</span>
+                      <button
+                        onClick={() => handleSelectBook(book.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${ui.accentSoft}`}
+                      >
+                        Abrir Estúdio
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-
-            {/* SEÇÃO: DOCUMENTOS & PDFs DE ESTUDO */}
-            <div className="pt-6 border-t border-slate-800">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-indigo-500"/>
-                  Documentos de Apoio ({myPdfs.length})
-                </h2>
-
-                <input 
-                  type="file" 
-                  ref={docFileInputRef} 
-                  onChange={handleFileUpload} 
-                  accept=".txt,.md" 
-                  className="hidden" 
-                />
-                <button
-                  onClick={() => docFileInputRef.current?.click()}
-                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all"
-                >
-                  <FileUp className="w-4 h-4 text-indigo-400"/>
-                  Anexar Documento (.txt / .md)
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {myPdfs.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className={`p-4 rounded-xl border flex items-center justify-between ${
-                      isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      <div className="p-2.5 bg-indigo-600/10 text-indigo-400 rounded-lg">
-                        <FileText className="w-5 h-5"/>
-                      </div>
-                      <div className="truncate">
-                        <h4 className="font-semibold text-sm truncate">{doc.title}</h4>
-                        <p className="text-xs text-slate-500">{doc.fileName} • {doc.size}</p>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => openFlipbook({ title: doc.title, content: doc.content })}
-                      className="px-3 py-1.5 rounded-lg border border-slate-700 hover:bg-slate-800 text-xs text-indigo-400 transition-colors whitespace-nowrap ml-2"
-                    >
-                      Visualizar
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+            )}
 
           </div>
-        )}
-
-        {/* --- TAB 2: EDITOR PRO --- */}
-        {activeTab === 'editor' && (
-          <div className="h-[calc(100vh-8rem)] flex flex-col md:flex-row gap-4 animate-fadeIn">
-            
-            {/* PAINEL LATERAL DO EDITOR */}
-            <div className={`w-full md:w-64 flex flex-col rounded-2xl border p-4 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
-              <h3 className="font-bold text-sm uppercase tracking-wider text-slate-500 mb-3">Seus Manuscritos</h3>
-              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                {books.map(b => (
-                  <button
-                    key={b.id}
-                    onClick={() => setSelectedBookId(b.id)}
-                    className={`w-full text-left p-3 rounded-xl transition-all ${
-                      b.id === selectedBookId 
-                        ? 'bg-indigo-600 text-white font-medium shadow-md' 
-                        : isDark ? 'hover:bg-slate-800/60 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    <p className="text-sm font-semibold truncate">{b.title || 'Sem título'}</p>
-                    <p className="text-xs opacity-75 truncate">{calculateWords(b.content)} palavras</p>
-                  </button>
-                ))}
-              </div>
-
-              <button
-                onClick={handleCreateNewBook}
-                className="mt-3 w-full py-2.5 rounded-xl border border-dashed border-slate-700 hover:border-indigo-500 text-indigo-400 flex items-center justify-center gap-2 text-xs font-semibold transition-all"
-              >
-                <Plus className="w-4 h-4"/> Criar Projeto
-              </button>
-            </div>
-
-            {/* ÁREA DO EDITOR DE TEXTO */}
-            <div className={`flex-1 flex flex-col rounded-2xl border ${isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200'}`}>
-              
-              {/* BARRA DE FERRAMENTAS DO EDITOR */}
-              <div className="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-4">
-                <input
-                  type="text"
-                  value={currentBook.title || ''}
-                  onChange={(e) => handleTitleChange(e.target.value)}
-                  placeholder="Título do Manuscrito..."
-                  className="bg-transparent text-xl font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded-lg px-2 py-1 flex-1 min-w-[200px]"
-                />
-
-                <div className="flex items-center gap-3 text-xs">
-                  <span className={`px-2.5 py-1 rounded-full ${
-                    saveStatus === 'salvo' ? 'bg-emerald-500/10 text-emerald-400' :
-                    saveStatus === 'salvando' ? 'bg-amber-500/10 text-amber-400' : 'bg-rose-500/10 text-rose-400'
-                  }`}>
-                    {saveStatus === 'salvo' ? '✓ Salvo' : saveStatus === 'salvando' ? 'Salvando...' : 'Erro ao salvar'}
-                  </span>
-
-                  <button
-                    onClick={() => handleExportTXT(currentBook)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 transition-colors"
-                  >
-                    <Download className="w-3.5 h-3.5"/> Baixar .TXT
-                  </button>
-                </div>
-              </div>
-
-              {/* EDITOR DE TEXTO (TEXTAREA RUSTICO & EFICIENTE) */}
-              <div className="flex-1 p-4 flex flex-col">
-                <textarea
-                  value={currentBook.content || ''}
-                  onChange={(e) => handleContentChange(e.target.value)}
-                  placeholder="Escreva sua história aqui... Use o atalho Ctrl+S para salvar manualmente a qualquer momento."
-                  className={`w-full flex-1 p-4 bg-transparent resize-none focus:outline-none font-serif text-lg leading-relaxed ${
-                    isDark ? 'text-slate-200 placeholder-slate-600' : 'text-slate-800 placeholder-slate-400'
-                  }`}
-                  style={{ fontSize: `${fontSize}px` }}
-                />
-              </div>
-
-              {/* BARRA DE STATUS INFERIOR */}
-              <div className="px-4 py-3 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500">
-                <div className="flex items-center gap-4">
-                  <span>{currentBookWords} palavras</span>
-                  <span>{(currentBook.content || '').length} caracteres</span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span>Tamanho da Fonte:</span>
-                  <button 
-                    onClick={() => setFontSize(f => Math.max(12, f - 2))} 
-                    className="p-1 rounded hover:bg-slate-800 font-bold"
-                  >
-                    -
-                  </button>
-                  <span>{fontSize}px</span>
-                  <button 
-                    onClick={() => setFontSize(f => Math.min(28, f + 2))} 
-                    className="p-1 rounded hover:bg-slate-800 font-bold"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-            </div>
-
-          </div>
-        )}
-
-        {/* --- TAB 3: CENTRAL DE APRENDIZADO --- */}
-        {activeTab === 'learning' && (
-          <div className="space-y-6 animate-fadeIn">
-            
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-6">
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Central de Aprendizado</h1>
-                <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Guias estruturados, teoria literária e técnicas avançadas de narrativa.
-                </p>
-              </div>
-
-              <div className="relative w-full md:w-72">
-                <Search className="w-4 h-4 absolute left-3 top-3 text-slate-500"/>
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Buscar técnicas ou conceitos..."
-                  className={`w-full pl-9 pr-4 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
-                  }`}
-                />
-              </div>
-            </div>
-
-            {/* ABAS DOS MÓDULOS */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2">
-              {APRENDIZAGEM_CONTEUDO.map((mod) => {
-                const IconComponent = mod.icon;
-                return (
-                  <button
-                    key={mod.id}
-                    onClick={() => setSelectedModule(mod.id)}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
-                      selectedModule === mod.id
-                        ? 'bg-indigo-600 text-white shadow-md'
-                        : isDark ? 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200' : 'bg-white border border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    <IconComponent className="w-4 h-4"/>
-                    {mod.title}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* LISTA DE AULAS/CONTEÚDOS */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {filteredLessons.map((lesson, idx) => (
-                <div
-                  key={idx}
-                  className={`p-6 rounded-2xl border transition-all ${
-                    isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-indigo-600/10 text-indigo-400 border border-indigo-500/20">
-                      {lesson.tag}
-                    </span>
-                  </div>
-
-                  <h3 className="text-lg font-bold mb-2">{lesson.subtitle}</h3>
-                  <p className={`text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                    {lesson.details}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-          </div>
-        )}
-
-      </main>
-
-      {/* --- MODAL: LEITOR FLIPBOOK --- */}
-      {flipbookActive && flipbookBook && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className={`relative w-full max-w-3xl h-[85vh] rounded-2xl border flex flex-col shadow-2xl overflow-hidden ${
-            isDark ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-amber-50/95 border-amber-200 text-amber-950'
-          }`}>
-            
-            {/* TOPO DO LEITOR */}
-            <div className="p-4 border-b border-slate-800/40 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-indigo-500"/>
-                <h3 className="font-bold text-sm truncate max-w-md">{flipbookBook.title}</h3>
-              </div>
-              <button
-                onClick={closeFlipbook}
-                className="p-1.5 rounded-lg hover:bg-slate-800/20 transition-colors"
-              >
-                <X className="w-6 h-6"/>
-              </button>
-            </div>
-
-            {/* PÁGINA DO LIVRO */}
-            <div className="flex-1 p-8 overflow-y-auto font-serif leading-relaxed text-lg whitespace-pre-wrap">
-              {pages[currentPageIndex]}
-            </div>
-
-const confirmDelete = async () => {
-  if (deleteConfirmId == null) return;
-
-  try {
-    await handleDeleteBook(deleteConfirmId);
-    setDeleteConfirmId(null);
-  } catch (error) {
-    console.error("Erro ao excluir manuscrito:", error);
-  }
-};
-
-
-            {/* NAVEGAÇÃO DE PÁGINAS */}
-            <div className={`p-4 border-t flex items-center justify-between text-xs ${
-              theme === 'dark' ? 'border-slate-800/40' : 'border-slate-200'
-            }`}>
-              <button
-                type="button"
-                disabled={currentPageIndex === 0}
-                onClick={() => setCurrentPageIndex(p => Math.max(0, p - 1))}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-800/20"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span>Anterior</span>
-              </button>
-
-              <span>
-                Página {currentPageIndex + 1} de {pages.length || 1}
-              </span>
-
-              <button
-                type="button"
-                disabled={currentPageIndex >= pages.length - 1}
-                onClick={() => setCurrentPageIndex(p => Math.min(pages.length - 1, p + 1))}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-800/20"
-              >
-                <span>Próxima</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-        </div>
-      </div>
-const confirmDelete = async () => {
-  if (!deleteConfirmId) return;
-
-  try {
-    await handleDeleteBook(deleteConfirmId);
-    setDeleteConfirmId(null);
-  } catch (error) {
-    console.error("Erro ao excluir manuscrito:", error);
-  }
-};
-
-<button
-  type="button"
-  onClick={confirmDelete}
-  className="px-4 py-2 rounded-xl text-sm font-medium bg-red-600 hover:bg-red-500 text-white shadow-md"
->
-  Excluir
-</button>
-
-{/* Modal de Confirmação de Exclusão */}
-{deleteConfirmId !== null && (
-  <div
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="delete-confirm-title"
-    className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-    onClick={() => setDeleteConfirmId(null)}
-  >
-    <div
-      className={`max-w-md w-full border rounded-2xl p-6 shadow-xl ${
-        theme === "dark"
-          ? "border-slate-800 bg-slate-900 text-slate-100"
-          : "border-slate-200 bg-white text-slate-900"
-      }`}
-      onClick={(event) => event.stopPropagation()}
-    >
-      <h3 id="delete-confirm-title" className="font-bold text-lg mb-2">
-        Confirmar Exclusão
-      </h3>
-
-      <p
-        className={`text-sm mb-6 ${
-          theme === "dark" ? "text-slate-400" : "text-slate-600"
-        }`}
-      >
-        Tem certeza de que deseja excluir este manuscrito? Esta ação não pode ser
-        desfeita.
-      </p>
-
-      <div className="flex justify-end gap-3">
-        <button
-          type="button"
-          onClick={() => setDeleteConfirmId(null)}
-          className={`px-4 py-2 rounded-xl text-sm font-medium border ${
-            theme === "dark"
-              ? "border-slate-700 hover:bg-slate-800"
-              : "border-slate-300 hover:bg-slate-100"
-          }`}
-        >
-          Cancelar
-        </button>
-
-        <button
-          type="button"
-          onClick={confirmDelete}
-          className="px-4 py-2 rounded-xl text-sm font-medium bg-red-600 hover:bg-red-500 text-white shadow-md"
-        >
-          Excluir
-        </button>
+        </main>
       </div>
     </div>
-  </div>
-)}
+  );
+}
