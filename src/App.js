@@ -6,7 +6,7 @@ import {
   GraduationCap, Compass, Users, Lightbulb, TrendingUp, Search,
   Trash2, Download, Upload, ChevronLeft, ChevronRight, BookOpen,
   User, Heart, MessageCircle, Send, Globe,
-  Music, Play, Pause, SkipBack, SkipForward, Volume2, Share2, LogOut
+  Music, Play, Pause, SkipBack, SkipForward, Volume2, Share2, LogOut, Timer
 } from 'lucide-react';
 
 // --- BANCO DE DADOS INDEXEDDB ASSÍNCRONO ---
@@ -393,18 +393,42 @@ const READER_THEMES = {
   dark: { bg: '#0f172a', fg: '#cbd5e1', border: '#1e293b', label: 'Escuro' }
 };
 
-const ComfortReader = ({ title, pages, onClose, defaultTheme }) => {
+const ComfortReader = ({ title, pages, onClose, defaultTheme, docKey }) => {
   const [idx, setIdx] = useState(0);
+  const [query, setQuery] = useState('');
   const [prefs, setPrefs] = useState({ theme: defaultTheme, size: 19, serif: true, spacing: 1.8, width: 65 });
   const scrollRef = useRef(null);
+  const progressRef = useRef({});
+  const progressLoaded = useRef(false);
   const t = READER_THEMES[prefs.theme] || READER_THEMES.sepia;
   const total = pages.length || 1;
+  const q = query.trim().toLowerCase();
 
   useEffect(() => {
     let alive = true;
     dbGet('settings', 'readerPrefs').then(saved => { if (alive && saved) setPrefs(p => ({ ...p, ...saved })); });
     return () => { alive = false; };
   }, []);
+
+  // Retoma a página onde a pessoa parou neste documento
+  useEffect(() => {
+    let alive = true;
+    progressLoaded.current = false;
+    dbGet('settings', 'readingProgress').then(map => {
+      if (!alive) return;
+      progressRef.current = map || {};
+      const saved = docKey ? progressRef.current[docKey] : 0;
+      if (Number.isInteger(saved)) setIdx(Math.min(Math.max(0, saved), total - 1));
+      progressLoaded.current = true;
+    });
+    return () => { alive = false; };
+  }, [docKey, total]);
+
+  useEffect(() => {
+    if (!docKey || !progressLoaded.current) return;
+    progressRef.current = { ...progressRef.current, [docKey]: idx };
+    dbSet('settings', progressRef.current, 'readingProgress');
+  }, [idx, docKey]);
 
   const update = (patch) => {
     const next = { ...prefs, ...patch };
@@ -413,9 +437,22 @@ const ComfortReader = ({ title, pages, onClose, defaultTheme }) => {
   };
   const go = useCallback((d) => setIdx(i => Math.min(total - 1, Math.max(0, i + d))), [total]);
 
+  const hits = useMemo(
+    () => (q.length < 2 ? [] : pages.map((pg, i) => (pg.toLowerCase().includes(q) ? i : -1)).filter(i => i >= 0)),
+    [pages, q]
+  );
+  const jumpHit = (dir) => {
+    if (!hits.length) return;
+    const next = dir > 0
+      ? (hits.find(h => h > idx) ?? hits[0])
+      : ([...hits].reverse().find(h => h < idx) ?? hits[hits.length - 1]);
+    setIdx(next);
+  };
+
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') onClose();
+      else if (e.target && e.target.tagName === 'INPUT') return;
       else if (e.key === 'ArrowRight') go(1);
       else if (e.key === 'ArrowLeft') go(-1);
     };
@@ -430,6 +467,9 @@ const ComfortReader = ({ title, pages, onClose, defaultTheme }) => {
     <button key={label} type="button" onClick={() => update({ [key]: val })} className={btn(prefs[key] === val)} style={{ borderColor: t.border }} aria-pressed={prefs[key] === val}>{label}</button>
   ));
   const nav = 'flex items-center gap-1 px-3 py-1.5 rounded-lg border disabled:opacity-30 disabled:cursor-not-allowed hover:bg-black/10';
+
+  const pageText = pages[idx] || '';
+  const parts = q.length >= 2 ? pageText.split(new RegExp(`(${escapeRegExp(q)})`, 'gi')) : [pageText];
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex flex-col" style={{ background: t.bg, color: t.fg }}>
@@ -457,6 +497,25 @@ const ComfortReader = ({ title, pages, onClose, defaultTheme }) => {
         <div className="flex items-center gap-1">{opts([['Serifa', true], ['Sem serifa', false]], 'serif')}</div>
         <div className="flex items-center gap-1">{opts([['Estreita', 50], ['Média', 65], ['Larga', 80]], 'width')}</div>
         <div className="flex items-center gap-1">{opts([['Compacto', 1.5], ['Normal', 1.8], ['Amplo', 2.1]], 'spacing')}</div>
+        <div className="flex items-center gap-1">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') jumpHit(e.shiftKey ? -1 : 1); }}
+            placeholder="Buscar no texto"
+            aria-label="Buscar no texto"
+            className="px-2 py-1 rounded-lg border text-xs bg-transparent w-36 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            style={{ borderColor: t.border }}
+          />
+          {q.length >= 2 && (
+            <>
+              <span className="tabular-nums">{hits.length} pág.</span>
+              <button type="button" onClick={() => jumpHit(-1)} disabled={!hits.length} className={btn(false)} style={{ borderColor: t.border }} aria-label="Resultado anterior">↑</button>
+              <button type="button" onClick={() => jumpHit(1)} disabled={!hits.length} className={btn(false)} style={{ borderColor: t.border }} aria-label="Próximo resultado">↓</button>
+            </>
+          )}
+        </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-8">
@@ -469,7 +528,9 @@ const ComfortReader = ({ title, pages, onClose, defaultTheme }) => {
             fontFamily: prefs.serif ? 'Georgia, "Times New Roman", serif' : 'system-ui, -apple-system, "Segoe UI", sans-serif'
           }}
         >
-          {pages[idx]}
+          {parts.map((part, i) => (i % 2 === 1
+            ? <mark key={i} style={{ background: '#fde047', color: '#1c1917' }}>{part}</mark>
+            : part))}
         </article>
       </div>
 
@@ -590,7 +651,7 @@ const MusicPlayer = ({ isDark, showNotification }) => {
   const round = `p-2 rounded-full disabled:opacity-40 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`;
 
   return (
-    <aside className={`rounded-2xl border p-5 space-y-4 lg:sticky lg:top-24 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+    <aside className={`rounded-2xl border p-5 space-y-4 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
       <h2 className="font-bold flex items-center gap-2">
         <Music className="w-5 h-5 text-indigo-500" /> Música para ler
       </h2>
@@ -782,7 +843,7 @@ const ReadingTab = ({ isDark, pdfs, busy, publishedIds, communityReads, onUpload
                       <p className="text-xs text-amber-500 mt-2">Sem texto selecionável (provável PDF escaneado): o modo confortável não está disponível, mas dá para abrir o original.</p>
                     )}
                     <div className="flex flex-wrap items-center gap-2 mt-3">
-                      <button type="button" disabled={pdf.scanned} onClick={() => onRead({ title: pdf.title, content: pdf.text })} className={`${ghost} text-indigo-400 disabled:opacity-40`}>
+                      <button type="button" disabled={pdf.scanned} onClick={() => onRead({ title: pdf.title, content: pdf.text, key: `pdf:${pdf.id}` })} className={`${ghost} text-indigo-400 disabled:opacity-40`}>
                         <BookOpen className="w-3.5 h-3.5" /> Ler
                       </button>
                       <button type="button" onClick={() => onOpenOriginal(pdf)} className={ghost}>Abrir original</button>
@@ -814,7 +875,7 @@ const ReadingTab = ({ isDark, pdfs, busy, publishedIds, communityReads, onUpload
                     <h4 className="font-semibold text-sm truncate">{item.title}</h4>
                     <p className="text-xs text-slate-500 truncate">{item.kind === 'pdf' ? 'PDF' : 'Livro'} • {item.meta} • por {item.author} (@{item.handle})</p>
                   </div>
-                  <button type="button" onClick={() => onRead({ title: item.title, content: item.content })} className={`${ghost} text-indigo-400`}>
+                  <button type="button" onClick={() => onRead({ title: item.title, content: item.content, key: `post:${item.id}` })} className={`${ghost} text-indigo-400`}>
                     <BookOpen className="w-3.5 h-3.5" /> Ler
                   </button>
                 </div>
@@ -824,9 +885,123 @@ const ReadingTab = ({ isDark, pdfs, busy, publishedIds, communityReads, onUpload
 
         </div>
 
-        <MusicPlayer isDark={isDark} showNotification={showNotification} />
+        <div className="space-y-6 lg:sticky lg:top-24">
+          <MusicPlayer isDark={isDark} showNotification={showNotification} />
+          <FocusTimer isDark={isDark} showNotification={showNotification} />
+        </div>
       </div>
     </div>
+  );
+};
+
+// --- UTILITÁRIOS: backup, capítulos, exportação, versões e alarme ---
+const todayKey = () => new Date().toISOString().slice(0, 10);
+
+const escapeHtml = (str = '') => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
+  const fr = new FileReader();
+  fr.onload = () => resolve(fr.result);
+  fr.onerror = reject;
+  fr.readAsDataURL(blob);
+});
+const dataUrlToBlob = async (dataUrl) => (await fetch(dataUrl)).blob();
+
+const bookToHtml = (book) =>
+  `<h1>${escapeHtml(book.title)}</h1>` +
+  (book.content || '').split('\n').map(l => (l.trim() ? `<p>${escapeHtml(l)}</p>` : '')).join('');
+
+// Encontra linhas como "Capítulo 1: ..." / "Chapter 2" / "Parte 3"
+const findChapters = (text = '') => {
+  const found = [];
+  const re = /^[ \t]*(?:cap[ií]tulo|chapter|parte)[ \t]+\S.*$/gim;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    found.push({ title: m[0].trim().slice(0, 60), pos: m.index + (m[0].length - m[0].trimStart().length) });
+  }
+  return found;
+};
+
+// Guarda uma versão do manuscrito (máx. 20). Devolve a lista nova, ou null se nada mudou.
+const snapshotBook = async (book, label) => {
+  if (!book || !book.id || !(book.content || '').trim()) return null;
+  const key = `history:${book.id}`;
+  const list = (await dbGet('settings', key)) || [];
+  if (list[0] && list[0].content === book.content) return null;
+  const entry = { at: new Date().toISOString(), label, title: book.title || '', words: calculateWords(book.content), content: book.content };
+  const next = [entry, ...list].slice(0, 20);
+  await dbSet('settings', next, key);
+  return next;
+};
+
+const beep = () => {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    osc.frequency.value = 660;
+    osc.connect(ctx.destination);
+    osc.start();
+    setTimeout(() => { osc.stop(); ctx.close(); }, 500);
+  } catch { /* ignore */ }
+};
+
+const FocusTimer = ({ isDark, showNotification }) => {
+  const [minutes, setMinutes] = useState(25);
+  const [remaining, setRemaining] = useState(25 * 60);
+  const [running, setRunning] = useState(false);
+  const endRef = useRef(0);
+
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => {
+      const left = Math.max(0, Math.round((endRef.current - Date.now()) / 1000));
+      setRemaining(left);
+      if (left === 0) {
+        setRunning(false);
+        showNotification('Tempo de foco concluído! Hora de uma pausa.');
+        beep();
+      }
+    }, 500);
+    return () => clearInterval(id);
+  }, [running, showNotification]);
+
+  const choose = (m) => { setMinutes(m); setRemaining(m * 60); setRunning(false); };
+  const start = () => {
+    const secs = remaining > 0 ? remaining : minutes * 60;
+    setRemaining(secs);
+    endRef.current = Date.now() + secs * 1000;
+    setRunning(true);
+  };
+
+  const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+  const ss = String(remaining % 60).padStart(2, '0');
+  const small = `px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'}`;
+
+  return (
+    <section className={`rounded-2xl border p-5 space-y-4 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+      <h2 className="font-bold flex items-center gap-2">
+        <Timer className="w-5 h-5 text-indigo-500" /> Tempo de foco
+      </h2>
+      <p className="text-4xl font-bold text-center tabular-nums" aria-live="off">{mm}:{ss}</p>
+      <div className="flex items-center justify-center gap-2">
+        {[15, 25, 50].map(m => (
+          <button key={m} type="button" onClick={() => choose(m)} aria-pressed={minutes === m}
+            className={minutes === m ? 'px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white' : small}>
+            {m} min
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center justify-center gap-2">
+        {running ? (
+          <button type="button" onClick={() => setRunning(false)} className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium">Pausar</button>
+        ) : (
+          <button type="button" onClick={start} className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium">{remaining > 0 && remaining < minutes * 60 ? 'Continuar' : 'Iniciar'}</button>
+        )}
+        <button type="button" onClick={() => choose(minutes)} className={small}>Zerar</button>
+      </div>
+    </section>
   );
 };
 
@@ -842,6 +1017,16 @@ export default function EstudioApp() {
   const [myPdfs, setMyPdfs] = useState([]);
   const [pdfs, setPdfs] = useState([]);
   const [pdfBusy, setPdfBusy] = useState(false);
+
+  // Meta diária, modo foco, versões e backup
+  const [dailyGoal, setDailyGoal] = useState(500);
+  const [dayBaseline, setDayBaseline] = useState(null);
+  const [focusMode, setFocusMode] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [lastBackupAt, setLastBackupAt] = useState(null);
+  const backupInputRef = useRef(null);
+  const editorRef = useRef(null);
 
   const [selectedBookId, setSelectedBookId] = useState('');
   const [saveStatus, setSaveStatus] = useState('salvo');
@@ -910,6 +1095,13 @@ export default function EstudioApp() {
           setProfile(savedProfile);
           setProfileDraft(savedProfile);
         }
+
+        const savedGoal = await dbGet('settings', 'dailyGoal');
+        if (savedGoal && isMounted) setDailyGoal(savedGoal);
+        const savedBaseline = await dbGet('settings', 'dayBaseline');
+        if (savedBaseline && isMounted) setDayBaseline(savedBaseline);
+        const savedBackupAt = await dbGet('settings', 'lastBackupAt');
+        if (savedBackupAt && isMounted) setLastBackupAt(savedBackupAt);
 
         const savedPdfFiles = await dbGet('pdfs');
         if (savedPdfFiles && isMounted) setPdfs(savedPdfFiles);
@@ -1042,6 +1234,7 @@ export default function EstudioApp() {
       const filtered = books.filter(b => b.id !== id);
       setBooks(filtered);
       await dbDelete('books', id);
+      await dbDelete('settings', `history:${id}`);
       if (selectedBookId === id && filtered.length > 0) {
         setSelectedBookId(filtered[0].id);
       }
@@ -1437,6 +1630,185 @@ export default function EstudioApp() {
 
   const isDark = theme === 'dark';
 
+  const toolBtn = `flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${
+    isDark ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-300 hover:bg-slate-100 text-slate-700'
+  }`;
+  const libBtn = `flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+    isDark ? 'border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+  }`;
+
+  // --- Meta diária de palavras ---
+  const totalWords = useMemo(() => books.reduce((sum, b) => sum + calculateWords(b.content), 0), [books]);
+  const todayWords = Math.max(0, totalWords - (dayBaseline ? dayBaseline.words : totalWords));
+  const backupOld = !lastBackupAt || (Date.now() - new Date(lastBackupAt).getTime()) > 7 * 24 * 3600 * 1000;
+  const chapters = useMemo(() => findChapters(currentBook.content), [currentBook.content]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    const today = todayKey();
+    if (!dayBaseline || dayBaseline.date !== today) {
+      const base = { date: today, words: totalWords };
+      setDayBaseline(base);
+      dbSet('settings', base, 'dayBaseline');
+    }
+  }, [isLoaded, dayBaseline, totalWords]);
+
+  // Versão automática a cada 5 minutos (só se o texto mudou)
+  useEffect(() => {
+    if (!isLoaded) return;
+    const id = setInterval(() => {
+      const b = currentBookRef.current;
+      if (b && b.id) snapshotBook(b, 'auto');
+    }, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [isLoaded]);
+
+  // Esc sai do modo foco
+  useEffect(() => {
+    if (!focusMode) return;
+    const onKey = (e) => { if (e.key === 'Escape') setFocusMode(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [focusMode]);
+
+  const handleGoalChange = (value) => {
+    const n = Math.max(0, Math.min(100000, Number(value) || 0));
+    setDailyGoal(n);
+    dbSet('settings', n, 'dailyGoal');
+  };
+
+  // --- Versões ---
+  const openHistory = async () => {
+    setHistory((await dbGet('settings', `history:${currentBook.id}`)) || []);
+    setHistoryOpen(true);
+  };
+
+  const handleSaveVersion = async () => {
+    const next = await snapshotBook(currentBook, 'manual');
+    if (next) {
+      setHistory(next);
+      showNotification('Versão salva!');
+    } else {
+      showNotification('Nenhuma mudança desde a última versão.');
+    }
+  };
+
+  const handleRestoreVersion = async (entry) => {
+    await snapshotBook(currentBook, 'antes-de-restaurar');
+    handleContentChange(entry.content);
+    setHistory((await dbGet('settings', `history:${currentBook.id}`)) || []);
+    showNotification('Versão restaurada. O texto anterior ficou guardado no histórico.');
+  };
+
+  // --- Capítulos ---
+  const jumpToChapter = (pos) => {
+    const el = editorRef.current;
+    if (!el) return;
+    el.scrollTop = Math.max(0, (pos / Math.max(1, el.value.length)) * el.scrollHeight - 40);
+    el.focus();
+    el.setSelectionRange(pos, pos);
+  };
+
+  // --- Exportar para Word / PDF ---
+  const handleExportWord = (book) => {
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>${escapeHtml(book.title)}</title></head><body style="font-family:Georgia,serif;font-size:12pt;line-height:1.5">${bookToHtml(book)}</body></html>`;
+    const fileName = `${(book.title || 'manuscrito').toLowerCase().replace(/[^a-z0-9]/g, '_')}.doc`;
+    triggerSecureDownload('\ufeff' + html, fileName, 'application/msword');
+    showNotification('Manuscrito baixado para o Word (.doc)!');
+  };
+
+  const handlePrintPdf = (book) => {
+    const w = window.open('', '_blank');
+    if (!w) {
+      showNotification('Permita pop-ups neste site para gerar o PDF.');
+      return;
+    }
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(book.title)}</title><style>body{font-family:Georgia,serif;max-width:680px;margin:40px auto;line-height:1.7;font-size:12pt}h1{font-size:22pt}p{margin:0 0 12px}</style></head><body>${bookToHtml(book)}</body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 300);
+  };
+
+  // --- Backup completo ---
+  const handleExportAll = async () => {
+    try {
+      showNotification('Preparando o backup...');
+      const pdfRecords = [];
+      for (const rec of pdfs) {
+        const { blob, ...rest } = rec;
+        pdfRecords.push({ ...rest, fileData: blob ? await blobToDataUrl(blob) : null });
+      }
+      const settings = {};
+      for (const k of ['theme', 'readerPrefs', 'musicLinks', 'dailyGoal', 'readingProgress']) {
+        const v = await dbGet('settings', k);
+        if (v !== undefined && v !== null) settings[k] = v;
+      }
+      const payload = {
+        app: 'estudio-narrativo',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        profile: { ...profile, google: null },
+        settings,
+        books,
+        documents: myPdfs,
+        pdfs: pdfRecords,
+        posts: posts.filter(post => post.isMine)
+      };
+      triggerSecureDownload(JSON.stringify(payload), `estudio-narrativo-backup-${todayKey()}.json`, 'application/json');
+      const stamp = new Date().toISOString();
+      setLastBackupAt(stamp);
+      await dbSet('settings', stamp, 'lastBackupAt');
+      showNotification('Backup completo baixado!');
+    } catch (err) {
+      console.error('Erro ao gerar backup:', err);
+      showNotification('Erro ao gerar o backup.');
+    }
+  };
+
+  // Restaura sem apagar nada: só adiciona o que ainda não existe aqui.
+  const handleRestoreBackup = (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data || data.app !== 'estudio-narrativo' || !Array.isArray(data.books)) throw new Error('formato');
+
+        for (const b of data.books) {
+          if (b && b.id && !books.some(x => x.id === b.id)) await dbSet('books', b);
+        }
+        for (const d of (data.documents || [])) {
+          if (d && d.id && !myPdfs.some(x => x.id === d.id)) await dbSet('documents', d);
+        }
+        for (const rec of (data.pdfs || [])) {
+          if (!rec || !rec.id || pdfs.some(x => x.id === rec.id)) continue;
+          const { fileData, ...rest } = rec;
+          await dbSet('pdfs', { ...rest, blob: fileData ? await dataUrlToBlob(fileData) : null });
+        }
+        for (const post of (data.posts || [])) {
+          if (post && post.id && !posts.some(x => x.id === post.id)) await dbSet('posts', post);
+        }
+        for (const [k, v] of Object.entries(data.settings || {})) {
+          if (['readerPrefs', 'musicLinks', 'dailyGoal', 'readingProgress'].includes(k)) await dbSet('settings', v, k);
+        }
+        if (data.profile && profile.name === 'Autor' && !profile.google) {
+          await dbSet('settings', { ...data.profile, google: null }, 'profile');
+        }
+
+        showNotification('Backup restaurado! Recarregando...');
+        setTimeout(() => window.location.reload(), 1200);
+      } catch (err) {
+        console.error('Erro ao restaurar backup:', err);
+        showNotification('Erro: arquivo de backup inválido ou corrompido.');
+      }
+    };
+    reader.onerror = () => showNotification('Erro ao ler o arquivo de backup.');
+    reader.readAsText(file);
+  };
+
+
   const navItems = [
     { id: 'library', label: 'Biblioteca', Icon: BookOpen },
     { id: 'editor', label: 'Editor Pro', Icon: Edit3 },
@@ -1564,6 +1936,11 @@ export default function EstudioApp() {
                 <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
                   Gerencie seus manuscritos e documentos de estudo localmente.
                 </p>
+                <p className={`text-xs mt-1 ${backupOld ? 'text-amber-500' : 'text-slate-500'}`}>
+                  {lastBackupAt
+                    ? `Último backup: ${new Date(lastBackupAt).toLocaleDateString('pt-BR')}`
+                    : 'Você ainda não fez backup. Use "Backup completo" para guardar uma cópia.'}
+                </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
@@ -1582,6 +1959,16 @@ export default function EstudioApp() {
                 >
                   <Upload className="w-4 h-4 text-indigo-400" />
                   Importar Projeto JSON
+                </button>
+
+                <input type="file" ref={backupInputRef} onChange={handleRestoreBackup} accept=".json" className="hidden" />
+                <button onClick={handleExportAll} className={libBtn}>
+                  <Download className="w-4 h-4 text-indigo-400" />
+                  Backup completo
+                </button>
+                <button onClick={() => backupInputRef.current?.click()} className={libBtn}>
+                  <Upload className="w-4 h-4 text-indigo-400" />
+                  Restaurar backup
                 </button>
 
                 <button
@@ -1632,7 +2019,7 @@ export default function EstudioApp() {
 
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => openFlipbook(book)}
+                          onClick={() => openFlipbook({ ...book, key: `book:${book.id}` })}
                           className="p-2 rounded-lg hover:bg-indigo-600/10 text-indigo-400 transition-colors"
                           title="Ler no Flipbook"
                         >
@@ -1715,7 +2102,7 @@ export default function EstudioApp() {
 
                     <div className="flex items-center gap-1 ml-2">
                       <button
-                        onClick={() => openFlipbook({ title: doc.title, content: doc.content })}
+                        onClick={() => openFlipbook({ title: doc.title, content: doc.content, key: `doc:${doc.id}` })}
                         className={`px-3 py-1.5 rounded-lg border text-xs text-indigo-400 transition-colors whitespace-nowrap ${
                           isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'
                         }`}
@@ -1740,10 +2127,10 @@ export default function EstudioApp() {
 
         {/* --- EDITOR PRO --- */}
         {activeTab === 'editor' && (
-          <div className="h-[calc(100vh-8rem)] flex flex-col md:flex-row gap-4">
+          <div className={focusMode ? `fixed inset-0 z-40 p-4 md:p-10 flex flex-col ${isDark ? 'bg-slate-950' : 'bg-slate-50'}` : 'h-[calc(100vh-8rem)] flex flex-col md:flex-row gap-4'}>
 
             {/* LISTA LATERAL */}
-            <div className={`w-full md:w-64 flex flex-col rounded-2xl border p-4 max-h-60 md:max-h-none ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+            <div className={`${focusMode ? 'hidden ' : ''}w-full md:w-64 flex flex-col rounded-2xl border p-4 max-h-60 md:max-h-none ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
               <h3 className="font-bold text-sm uppercase tracking-wider text-slate-500 mb-3">Seus Manuscritos</h3>
               <div className="flex-1 overflow-y-auto space-y-2 pr-1">
                 {books.map(b => (
@@ -1798,11 +2185,51 @@ export default function EstudioApp() {
                   >
                     <Download className="w-3.5 h-3.5" /> Baixar .TXT
                   </button>
+
+                  <button onClick={() => handleExportWord(currentBook)} className={toolBtn}>Word</button>
+                  <button onClick={() => handlePrintPdf(currentBook)} className={toolBtn}>PDF</button>
+                  <button onClick={openHistory} className={toolBtn}>Versões</button>
+                  <button onClick={() => setFocusMode(f => !f)} className={toolBtn}>{focusMode ? 'Sair do foco' : 'Modo foco'}</button>
                 </div>
+              </div>
+
+              <div className={`px-4 py-2 border-b flex flex-wrap items-center gap-3 text-xs ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+                <span className="text-slate-500">Meta de hoje:</span>
+                <div className={`flex-1 min-w-[120px] h-2 rounded-full overflow-hidden ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
+                  <div className="h-full bg-emerald-500 transition-all" style={{ width: `${dailyGoal > 0 ? Math.min(100, (todayWords / dailyGoal) * 100) : 0}%` }} />
+                </div>
+                <span className="tabular-nums">{todayWords} /</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="50"
+                  value={dailyGoal}
+                  onChange={(e) => handleGoalChange(e.target.value)}
+                  aria-label="Meta diária de palavras"
+                  className={`w-20 px-2 py-1 rounded-lg border text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                    isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
+                  }`}
+                />
+                <span>palavras</span>
+                {dailyGoal > 0 && todayWords >= dailyGoal && <span className="text-emerald-500 font-semibold">Meta batida! 🎉</span>}
+                {chapters.length > 0 && (
+                  <select
+                    value=""
+                    onChange={(e) => { if (e.target.value !== '') jumpToChapter(Number(e.target.value)); }}
+                    aria-label="Ir para capítulo"
+                    className={`ml-auto px-2 py-1 rounded-lg border text-xs max-w-[200px] ${
+                      isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
+                    }`}
+                  >
+                    <option value="">Capítulos ({chapters.length})</option>
+                    {chapters.map((c, i) => <option key={i} value={c.pos}>{c.title}</option>)}
+                  </select>
+                )}
               </div>
 
               <div className="flex-1 p-4 flex flex-col min-h-0">
                 <textarea
+                  ref={editorRef}
                   value={currentBook.content || ''}
                   onChange={(e) => handleContentChange(e.target.value)}
                   placeholder="Escreva sua história aqui... Use Ctrl+S para salvar manualmente a qualquer momento."
@@ -2034,7 +2461,7 @@ export default function EstudioApp() {
                             <p className="text-xs text-indigo-400">{post.sharedBook.genre || 'Geral'}</p>
                           </div>
                           <button
-                            onClick={() => openFlipbook({ title: post.sharedBook.title, content: post.sharedBook.excerpt })}
+                            onClick={() => openFlipbook({ title: post.sharedBook.title, content: post.sharedBook.excerpt, key: `post:${post.id}` })}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs text-indigo-400 whitespace-nowrap transition-colors ${
                               isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'
                             }`}
@@ -2057,7 +2484,7 @@ export default function EstudioApp() {
                           <p className="text-xs text-indigo-400">PDF • {post.sharedPdf.numPages} páginas</p>
                         </div>
                         <button
-                          onClick={() => openFlipbook({ title: post.sharedPdf.title, content: post.sharedPdf.text })}
+                          onClick={() => openFlipbook({ title: post.sharedPdf.title, content: post.sharedPdf.text, key: `post:${post.id}` })}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs text-indigo-400 whitespace-nowrap transition-colors ${
                             isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'
                           }`}
@@ -2250,7 +2677,8 @@ export default function EstudioApp() {
       {/* --- LEITOR (MODO DE LEITURA CONFORTÁVEL) --- */}
       {flipbookActive && flipbookBook && (
         <ComfortReader
-          key={flipbookBook.title}
+          key={flipbookBook.key || flipbookBook.title}
+          docKey={flipbookBook.key}
           title={flipbookBook.title}
           pages={pages}
           onClose={closeFlipbook}
@@ -2299,6 +2727,50 @@ export default function EstudioApp() {
               >
                 Excluir
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: VERSÕES --- */}
+      {historyOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setHistoryOpen(false)}
+        >
+          <div
+            className={`max-w-lg w-full max-h-[80vh] flex flex-col border rounded-2xl p-6 shadow-xl ${
+              isDark ? 'border-slate-800 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white text-slate-900'
+            }`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg">Versões salvas</h3>
+              <button onClick={() => setHistoryOpen(false)} aria-label="Fechar"><X className="w-5 h-5" /></button>
+            </div>
+            <button
+              onClick={handleSaveVersion}
+              className="mb-4 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium"
+            >
+              Salvar versão agora
+            </button>
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {history.length === 0 && (
+                <p className="text-sm text-slate-500">Nenhuma versão ainda. O app guarda uma automaticamente a cada 5 minutos, quando há mudanças.</p>
+              )}
+              {history.map((h) => (
+                <div key={h.at} className={`flex items-center justify-between gap-3 p-3 rounded-xl border text-xs ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+                  <div className="min-w-0">
+                    <p className="font-semibold">{new Date(h.at).toLocaleString('pt-BR')}</p>
+                    <p className="text-slate-500">
+                      {h.words} palavras • {h.label === 'manual' ? 'manual' : h.label === 'auto' ? 'automática' : 'antes de restaurar'}
+                    </p>
+                  </div>
+                  <button onClick={() => handleRestoreVersion(h)} className={toolBtn}>Restaurar</button>
+                </div>
+              ))}
             </div>
           </div>
         </div>
