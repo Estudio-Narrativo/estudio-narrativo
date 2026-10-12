@@ -343,7 +343,8 @@ const APRENDIZAGEM_CONTEUDO = [
 // Adicione a origem do app (ex.: http://localhost:5173) em "Origens JavaScript autorizadas".
 const GOOGLE_CLIENT_ID = 'COLE_SEU_CLIENT_ID.apps.googleusercontent.com';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+// Worker via CDN, na mesma versão instalada (evita problemas de bundling no react-scripts).
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
 
 // Junta as linhas quebradas do PDF em parágrafos (heurística: linhas curtas encerram parágrafo).
@@ -852,7 +853,7 @@ export default function EstudioApp() {
 
   const [flipbookActive, setFlipbookActive] = useState(false);
   const [flipbookBook, setFlipbookBook] = useState(null);
-  const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  const [, setCurrentPageIndex] = useState(0);
   const [fontSize, setFontSize] = useState(16);
 
   // Perfil & Comunidade
@@ -2315,4 +2316,3 @@ export default function EstudioApp() {
     </div>
   );
 }
-
