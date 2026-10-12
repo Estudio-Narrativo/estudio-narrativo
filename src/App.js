@@ -6,7 +6,7 @@ import {
   GraduationCap, Compass, Users, Lightbulb, TrendingUp, Search,
   Trash2, Download, Upload, ChevronLeft, ChevronRight, BookOpen,
   User, Heart, MessageCircle, Send, Globe,
-  Music, Play, Pause, SkipBack, SkipForward, Volume2, Share2, LogOut, Timer
+  Music, Play, Pause, SkipBack, SkipForward, Volume2, Share2, LogOut, Timer, Tag
 } from 'lucide-react';
 
 // --- BANCO DE DADOS INDEXEDDB ASSÍNCRONO ---
@@ -341,7 +341,7 @@ const APRENDIZAGEM_CONTEUDO = [
 
 // Crie um "OAuth Client ID" (tipo Aplicativo da Web) no Google Cloud Console e cole aqui.
 // Adicione a origem do app (ex.: http://localhost:5173) em "Origens JavaScript autorizadas".
-const GOOGLE_CLIENT_ID = '270217798059-nl55t440h1srsfq80tak0lm9gngf0oid.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = 'COLE_SEU_CLIENT_ID.apps.googleusercontent.com';
 
 // Worker via CDN, na mesma versão instalada (evita problemas de bundling no react-scripts).
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -393,16 +393,37 @@ const READER_THEMES = {
   dark: { bg: '#0f172a', fg: '#cbd5e1', border: '#1e293b', label: 'Escuro' }
 };
 
+// Divide o texto em trechos curtos para a leitura em voz alta (evita cortes em textos longos)
+const toChunks = (text) => {
+  const sentences = String(text).replace(/\s+/g, ' ').match(/[^.!?]+[.!?]*/g) || [];
+  const chunks = [];
+  let cur = '';
+  for (const sen of sentences) {
+    if ((cur + sen).length > 220 && cur) { chunks.push(cur.trim()); cur = sen; }
+    else cur += sen;
+  }
+  if (cur.trim()) chunks.push(cur.trim());
+  return chunks;
+};
+
 const ComfortReader = ({ title, pages, onClose, defaultTheme, docKey }) => {
   const [idx, setIdx] = useState(0);
   const [query, setQuery] = useState('');
-  const [prefs, setPrefs] = useState({ theme: defaultTheme, size: 19, serif: true, spacing: 1.8, width: 65 });
+  const [speaking, setSpeaking] = useState(false);
+  const [notes, setNotes] = useState([]);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [quoteDraft, setQuoteDraft] = useState('');
+  const [prefs, setPrefs] = useState({ theme: defaultTheme, size: 19, serif: true, spacing: 1.8, width: 65, rate: 1 });
   const scrollRef = useRef(null);
+  const articleRef = useRef(null);
   const progressRef = useRef({});
   const progressLoaded = useRef(false);
+  const notesMapRef = useRef({});
   const t = READER_THEMES[prefs.theme] || READER_THEMES.sepia;
   const total = pages.length || 1;
   const q = query.trim().toLowerCase();
+  const supportsTts = typeof window !== 'undefined' && 'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance !== 'undefined';
 
   useEffect(() => {
     let alive = true;
@@ -430,6 +451,55 @@ const ComfortReader = ({ title, pages, onClose, defaultTheme, docKey }) => {
     dbSet('settings', progressRef.current, 'readingProgress');
   }, [idx, docKey]);
 
+  // Marcadores e anotações deste documento
+  useEffect(() => {
+    let alive = true;
+    dbGet('settings', 'annotations').then(map => {
+      if (!alive) return;
+      notesMapRef.current = map || {};
+      setNotes(docKey ? (notesMapRef.current[docKey] || []) : []);
+    });
+    return () => { alive = false; };
+  }, [docKey]);
+
+  const persistNotes = (next) => {
+    setNotes(next);
+    if (!docKey) return;
+    notesMapRef.current = { ...notesMapRef.current, [docKey]: next };
+    dbSet('settings', notesMapRef.current, 'annotations');
+  };
+
+  const isMarked = notes.some(n => n.kind === 'bookmark' && n.page === idx);
+  const toggleBookmark = () => {
+    if (isMarked) {
+      persistNotes(notes.filter(n => !(n.kind === 'bookmark' && n.page === idx)));
+    } else {
+      persistNotes([...notes, { id: `n_${Date.now()}`, kind: 'bookmark', page: idx, quote: '', text: '', createdAt: new Date().toISOString() }]);
+    }
+  };
+
+  const captureSelection = () => {
+    const sel = window.getSelection();
+    const picked = sel ? sel.toString().trim() : '';
+    const inside = sel && sel.anchorNode && articleRef.current && articleRef.current.contains(sel.anchorNode);
+    if (picked && inside) setQuoteDraft(picked.slice(0, 400));
+    setNotesOpen(true);
+  };
+
+  const addNote = () => {
+    const text = noteText.trim().slice(0, 1000);
+    const quote = quoteDraft.trim().slice(0, 400);
+    if (!text && !quote) return;
+    persistNotes([...notes, { id: `n_${Date.now()}`, kind: 'note', page: idx, quote, text, createdAt: new Date().toISOString() }]);
+    setNoteText('');
+    setQuoteDraft('');
+  };
+
+  const sortedNotes = useMemo(
+    () => [...notes].sort((a, b) => a.page - b.page || String(a.createdAt).localeCompare(String(b.createdAt))),
+    [notes]
+  );
+
   const update = (patch) => {
     const next = { ...prefs, ...patch };
     setPrefs(next);
@@ -449,10 +519,37 @@ const ComfortReader = ({ title, pages, onClose, defaultTheme, docKey }) => {
     setIdx(next);
   };
 
+  // Leitura em voz alta: lê a página atual e segue para a próxima até o fim ou até parar
+  useEffect(() => {
+    if (!speaking || !supportsTts) return;
+    const chunks = toChunks(pages[idx] || '');
+    let cancelled = false;
+    const run = (i) => {
+      if (cancelled) return;
+      if (i >= chunks.length) {
+        if (idx < total - 1) setIdx(idx + 1);
+        else setSpeaking(false);
+        return;
+      }
+      const u = new window.SpeechSynthesisUtterance(chunks[i]);
+      u.lang = 'pt-BR';
+      u.rate = prefs.rate || 1;
+      u.onend = () => run(i + 1);
+      u.onerror = () => { if (!cancelled) setSpeaking(false); };
+      window.speechSynthesis.speak(u);
+    };
+    window.speechSynthesis.cancel();
+    run(0);
+    return () => { cancelled = true; window.speechSynthesis.cancel(); };
+  }, [speaking, idx, pages, total, prefs.rate, supportsTts]);
+
+  useEffect(() => () => { if (window.speechSynthesis) window.speechSynthesis.cancel(); }, []);
+
   useEffect(() => {
     const onKey = (e) => {
+      const tag = e.target && e.target.tagName;
       if (e.key === 'Escape') onClose();
-      else if (e.target && e.target.tagName === 'INPUT') return;
+      else if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       else if (e.key === 'ArrowRight') go(1);
       else if (e.key === 'ArrowLeft') go(-1);
     };
@@ -516,10 +613,30 @@ const ComfortReader = ({ title, pages, onClose, defaultTheme, docKey }) => {
             </>
           )}
         </div>
+        {supportsTts && (
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => setSpeaking(v => !v)} className={btn(speaking)} style={{ borderColor: t.border }} aria-pressed={speaking}>
+              {speaking ? 'Parar leitura' : 'Ouvir'}
+            </button>
+            {opts([['Lenta', 0.85], ['Normal', 1], ['Rápida', 1.25]], 'rate')}
+          </div>
+        )}
+        {docKey && (
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={toggleBookmark} className={btn(isMarked)} style={{ borderColor: t.border }} aria-pressed={isMarked}>
+              {isMarked ? 'Página marcada ✓' : 'Marcar página'}
+            </button>
+            <button type="button" onClick={captureSelection} className={btn(false)} style={{ borderColor: t.border }}>Anotar seleção</button>
+            <button type="button" onClick={() => setNotesOpen(o => !o)} className={btn(notesOpen)} style={{ borderColor: t.border }} aria-pressed={notesOpen}>
+              Notas ({notes.length})
+            </button>
+          </div>
+        )}
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-8">
+      <div ref={scrollRef} className={`flex-1 overflow-y-auto px-5 py-8 ${notesOpen ? 'md:pr-80' : ''}`}>
         <article
+          ref={articleRef}
           className="mx-auto whitespace-pre-wrap break-words"
           style={{
             maxWidth: `${prefs.width}ch`,
@@ -534,6 +651,53 @@ const ComfortReader = ({ title, pages, onClose, defaultTheme, docKey }) => {
         </article>
       </div>
 
+      {notesOpen && docKey && (
+        <aside className="absolute right-0 top-0 bottom-0 w-80 max-w-full flex flex-col border-l shadow-xl z-10" style={{ background: t.bg, color: t.fg, borderColor: t.border }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: t.border }}>
+            <h4 className="font-bold text-sm">Anotações e marcadores</h4>
+            <button type="button" onClick={() => setNotesOpen(false)} className="p-1 rounded-lg hover:bg-black/10" aria-label="Fechar anotações">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-4 border-b space-y-2 text-xs" style={{ borderColor: t.border }}>
+            {quoteDraft ? (
+              <div className="rounded-lg border p-2 italic opacity-80" style={{ borderColor: t.border }}>
+                “{quoteDraft}”
+                <button type="button" onClick={() => setQuoteDraft('')} className="ml-2 not-italic underline">remover</button>
+              </div>
+            ) : (
+              <p className="opacity-70">Dica: selecione um trecho no texto e clique em "Anotar seleção".</p>
+            )}
+            <textarea
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              maxLength={1000}
+              rows={3}
+              placeholder={`Sua nota para a página ${idx + 1}...`}
+              className="w-full px-2 py-1.5 rounded-lg border bg-transparent resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              style={{ borderColor: t.border }}
+            />
+            <button type="button" onClick={addNote} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium">Salvar nota</button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-2 text-xs">
+            {sortedNotes.length === 0 && <p className="opacity-70">Nada por aqui ainda.</p>}
+            {sortedNotes.map(n => (
+              <div key={n.id} className="rounded-lg border p-2 space-y-1" style={{ borderColor: t.border }}>
+                <p className="font-semibold">{n.kind === 'bookmark' ? 'Marcador' : 'Nota'} • página {n.page + 1}</p>
+                {n.quote && <p className="italic opacity-80">“{n.quote}”</p>}
+                {n.text && <p className="whitespace-pre-wrap break-words">{n.text}</p>}
+                <div className="flex gap-3 pt-1">
+                  <button type="button" onClick={() => setIdx(Math.min(n.page, total - 1))} className="underline">Ir para a página</button>
+                  <button type="button" onClick={() => persistNotes(notes.filter(x => x.id !== n.id))} className="underline text-rose-500">Excluir</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
+      )}
+
       <div className="border-t" style={{ borderColor: t.border }}>
         <div className="h-1" style={{ background: t.border }}>
           <div className="h-full bg-indigo-500 transition-all" style={{ width: `${((idx + 1) / total) * 100}%` }} />
@@ -542,7 +706,7 @@ const ComfortReader = ({ title, pages, onClose, defaultTheme, docKey }) => {
           <button type="button" disabled={idx === 0} onClick={() => go(-1)} className={nav} style={{ borderColor: t.border }}>
             <ChevronLeft className="w-4 h-4" /> Anterior
           </button>
-          <span>Página {idx + 1} de {total}</span>
+          <span>Página {idx + 1} de {total}{isMarked ? ' • marcada' : ''}</span>
           <button type="button" disabled={idx >= total - 1} onClick={() => go(1)} className={nav} style={{ borderColor: t.border }}>
             Próxima <ChevronRight className="w-4 h-4" />
           </button>
@@ -780,14 +944,17 @@ const GoogleLinkCard = ({ google, isDark, onLink, onUnlink }) => {
       ) : configured ? (
         <div ref={btnRef} />
       ) : (
-        <p className="text-xs text-amber-500">Defina GOOGLE_CLIENT_ID no topo do App.jsx para ativar o vínculo.</p>
+        <p className="text-xs text-slate-500">Vínculo com a conta Google em breve.</p>
       )}
     </div>
   );
 };
 
 // --- Aba "Leitura": PDFs + comunidade + música ---
-const ReadingTab = ({ isDark, pdfs, busy, publishedIds, communityReads, onUpload, onRead, onDelete, onTogglePublish, onSendFile, onOpenOriginal, showNotification }) => {
+const ReadingTab = ({ isDark, pdfs, busy, publishedIds, communityReads, onUpload, onRead, onDelete, onTogglePublish, onSendFile, onOpenOriginal, onOrganize, showNotification }) => {
+  const [fq, setFq] = useState('');
+  const [fc, setFc] = useState('');
+  const [ft, setFt] = useState('');
   const inputRef = useRef(null);
   const muted = isDark ? 'text-slate-400' : 'text-slate-600';
   const card = isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200';
@@ -824,11 +991,14 @@ const ReadingTab = ({ isDark, pdfs, busy, publishedIds, communityReads, onUpload
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5 text-indigo-500" /> Meus PDFs ({pdfs.length})
             </h2>
+            {pdfs.length > 0 && (
+              <FilterBar isDark={isDark} items={pdfs} query={fq} setQuery={setFq} collection={fc} setCollection={setFc} tag={ft} setTag={setFt} />
+            )}
             {pdfs.length === 0 && (
               <p className={`text-sm ${muted}`}>Nenhum PDF ainda. Clique em "Adicionar PDF" para começar.</p>
             )}
             <div className="space-y-3">
-              {pdfs.map(pdf => {
+              {filterItems(pdfs, { query: fq, collection: fc, tag: ft }).map(pdf => {
                 const published = !!pdf.sharedPostId && publishedIds.has(pdf.sharedPostId);
                 return (
                   <div key={pdf.id} className={`p-4 rounded-xl border ${card}`}>
@@ -842,6 +1012,7 @@ const ReadingTab = ({ isDark, pdfs, busy, publishedIds, communityReads, onUpload
                     {pdf.scanned && (
                       <p className="text-xs text-amber-500 mt-2">Sem texto selecionável (provável PDF escaneado): o modo confortável não está disponível, mas dá para abrir o original.</p>
                     )}
+                    <TagChips item={pdf} isDark={isDark} />
                     <div className="flex flex-wrap items-center gap-2 mt-3">
                       <button type="button" disabled={pdf.scanned} onClick={() => onRead({ title: pdf.title, content: pdf.text, key: `pdf:${pdf.id}` })} className={`${ghost} text-indigo-400 disabled:opacity-40`}>
                         <BookOpen className="w-3.5 h-3.5" /> Ler
@@ -850,6 +1021,7 @@ const ReadingTab = ({ isDark, pdfs, busy, publishedIds, communityReads, onUpload
                       <button type="button" onClick={() => onTogglePublish(pdf)} className={ghost}>
                         <Share2 className="w-3.5 h-3.5" /> {published ? 'Remover da comunidade' : 'Publicar na comunidade'}
                       </button>
+                      <button type="button" onClick={() => onOrganize('pdf', pdf)} className={ghost}><Tag className="w-3.5 h-3.5" /> Etiquetas</button>
                       <button type="button" onClick={() => onSendFile(pdf)} className={ghost}>Enviar arquivo</button>
                       <button type="button" onClick={() => onDelete(pdf)} className="p-2 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors ml-auto" title="Remover PDF">
                         <Trash2 className="w-4 h-4" />
@@ -895,7 +1067,8 @@ const ReadingTab = ({ isDark, pdfs, busy, publishedIds, communityReads, onUpload
 };
 
 // --- UTILITÁRIOS: backup, capítulos, exportação, versões e alarme ---
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const dateKey = (d) => d.toLocaleDateString('sv-SE');
+const todayKey = () => dateKey(new Date());
 
 const escapeHtml = (str = '') => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1005,6 +1178,155 @@ const FocusTimer = ({ isDark, showNotification }) => {
   );
 };
 
+// --- BIBLIOTECA: busca, etiquetas e coleções ---
+const norm = (str = '') => String(str).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+const filterItems = (items, { query, collection, tag }) => {
+  const q = norm(query.trim());
+  return items.filter(it => {
+    if (collection && it.collection !== collection) return false;
+    if (tag && !(it.tags || []).includes(tag)) return false;
+    if (!q) return true;
+    return norm([it.title, it.author, it.genre, it.fileName, it.collection, ...(it.tags || [])].filter(Boolean).join(' ')).includes(q);
+  });
+};
+
+const TagChips = ({ item, isDark }) => {
+  const tags = item.tags || [];
+  if (!item.collection && tags.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2 mb-2">
+      {item.collection && (
+        <span className="text-[11px] px-2 py-0.5 rounded-md bg-indigo-600/10 text-indigo-400 border border-indigo-500/20">📁 {item.collection}</span>
+      )}
+      {tags.map(t => (
+        <span key={t} className={`text-[11px] px-2 py-0.5 rounded-md ${isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>#{t}</span>
+      ))}
+    </div>
+  );
+};
+
+const FilterBar = ({ isDark, items, query, setQuery, collection, setCollection, tag, setTag }) => {
+  const collections = [...new Set(items.map(i => i.collection).filter(Boolean))];
+  const tags = [...new Set(items.flatMap(i => i.tags || []))];
+  const field = `px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+    isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
+  }`;
+  return (
+    <div className="mb-4 space-y-2">
+      <div className="flex flex-wrap gap-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por título, autor, gênero ou etiqueta..."
+            aria-label="Buscar"
+            className={`${field} w-full pl-9`}
+          />
+        </div>
+        {collections.length > 0 && (
+          <select value={collection} onChange={(e) => setCollection(e.target.value)} aria-label="Filtrar por coleção" className={field}>
+            <option value="">Todas as coleções</option>
+            {collections.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
+      </div>
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map(t => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTag(tag === t ? '' : t)}
+              aria-pressed={tag === t}
+              className={`text-[11px] px-2 py-0.5 rounded-md border transition-colors ${
+                tag === t
+                  ? 'bg-indigo-600 border-indigo-600 text-white'
+                  : isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-300 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              #{t}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- PERFIL: estatísticas de escrita ---
+const WritingStats = ({ isDark, log, goal, todayWords }) => {
+  const live = { ...log, [dateKey(new Date())]: todayWords };
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push({
+      key: dateKey(d),
+      label: d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''),
+      words: live[dateKey(d)] || 0
+    });
+  }
+  const weekTotal = days.reduce((sum, d) => sum + d.words, 0);
+  const best = Math.max(0, ...Object.values(live));
+  const max = Math.max(goal, ...days.map(d => d.words), 1);
+
+  // Sequência: dias seguidos batendo a meta (se hoje ainda não bateu, conta a partir de ontem)
+  let streak = 0;
+  if (goal > 0) {
+    const cursor = new Date();
+    if ((live[dateKey(cursor)] || 0) < goal) cursor.setDate(cursor.getDate() - 1);
+    while (streak < 3650 && (live[dateKey(cursor)] || 0) >= goal) {
+      streak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+  }
+
+  return (
+    <div className={`rounded-2xl border p-6 space-y-5 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+      <h3 className="font-bold text-lg">Estatísticas de escrita</h3>
+
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div>
+          <p className="text-2xl font-bold">{streak} {streak > 0 ? '🔥' : ''}</p>
+          <p className="text-xs text-slate-500">{streak === 1 ? 'dia seguido' : 'dias seguidos'} na meta</p>
+        </div>
+        <div>
+          <p className="text-2xl font-bold">{weekTotal.toLocaleString('pt-BR')}</p>
+          <p className="text-xs text-slate-500">palavras nos últimos 7 dias</p>
+        </div>
+        <div>
+          <p className="text-2xl font-bold">{best.toLocaleString('pt-BR')}</p>
+          <p className="text-xs text-slate-500">melhor dia</p>
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-end gap-2 h-28">
+          {days.map(d => (
+            <div key={d.key} className="flex-1 h-full flex flex-col justify-end items-center" title={`${d.words} palavras`}>
+              <span className="text-[10px] text-slate-500 mb-1 tabular-nums">{d.words}</span>
+              <div
+                className={`w-full rounded-t-md ${goal > 0 && d.words >= goal ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                style={{ height: `${Math.max(2, (d.words / max) * 100)}%` }}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2 mt-1">
+          {days.map(d => <span key={d.key} className="flex-1 text-center text-[10px] text-slate-500">{d.label}</span>)}
+        </div>
+      </div>
+
+      <p className="text-xs text-slate-500">
+        Barras verdes são dias em que a meta ({goal} palavras) foi batida. O histórico começa a contar a partir do dia em que esta versão foi publicada.
+      </p>
+    </div>
+  );
+};
+
 // --- COMPONENTE PRINCIPAL ---
 
 export default function EstudioApp() {
@@ -1027,6 +1349,15 @@ export default function EstudioApp() {
   const [lastBackupAt, setLastBackupAt] = useState(null);
   const backupInputRef = useRef(null);
   const editorRef = useRef(null);
+
+  // Biblioteca (busca/etiquetas) e estatísticas
+  const [libQuery, setLibQuery] = useState('');
+  const [libCollection, setLibCollection] = useState('');
+  const [libTag, setLibTag] = useState('');
+  const [organizeTarget, setOrganizeTarget] = useState(null);
+  const [tagsDraft, setTagsDraft] = useState('');
+  const [collectionDraft, setCollectionDraft] = useState('');
+  const [writingLog, setWritingLog] = useState({});
 
   const [selectedBookId, setSelectedBookId] = useState('');
   const [saveStatus, setSaveStatus] = useState('salvo');
@@ -1100,6 +1431,8 @@ export default function EstudioApp() {
         if (savedGoal && isMounted) setDailyGoal(savedGoal);
         const savedBaseline = await dbGet('settings', 'dayBaseline');
         if (savedBaseline && isMounted) setDayBaseline(savedBaseline);
+        const savedLog = await dbGet('settings', 'writingLog');
+        if (savedLog && isMounted) setWritingLog(savedLog);
         const savedBackupAt = await dbGet('settings', 'lastBackupAt');
         if (savedBackupAt && isMounted) setLastBackupAt(savedBackupAt);
 
@@ -1637,6 +1970,40 @@ export default function EstudioApp() {
     isDark ? 'border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
   }`;
 
+  // --- Busca, etiquetas e coleções ---
+  const visibleBooks = useMemo(
+    () => filterItems(books, { query: libQuery, collection: libCollection, tag: libTag }),
+    [books, libQuery, libCollection, libTag]
+  );
+  const allCollections = useMemo(
+    () => [...new Set([...books, ...pdfs].map(i => i.collection).filter(Boolean))],
+    [books, pdfs]
+  );
+
+  const openOrganize = (kind, item) => {
+    setOrganizeTarget({ kind, item });
+    setTagsDraft((item.tags || []).join(', '));
+    setCollectionDraft(item.collection || '');
+  };
+
+  const saveOrganize = async () => {
+    if (!organizeTarget) return;
+    const tags = [...new Set(tagsDraft.split(',').map(x => sanitizeInput(x).toLowerCase().slice(0, 24)).filter(Boolean))].slice(0, 8);
+    const collection = sanitizeInput(collectionDraft).slice(0, 40);
+    const { kind, item } = organizeTarget;
+    if (kind === 'book') {
+      const updated = { ...(books.find(b => b.id === item.id) || item), tags, collection };
+      setBooks(prev => prev.map(b => (b.id === item.id ? updated : b)));
+      await dbSet('books', updated);
+    } else {
+      const updated = { ...(pdfs.find(x => x.id === item.id) || item), tags, collection };
+      setPdfs(prev => prev.map(x => (x.id === item.id ? updated : x)));
+      await dbSet('pdfs', updated);
+    }
+    setOrganizeTarget(null);
+    showNotification('Etiquetas e coleção salvas!');
+  };
+
   // --- Meta diária de palavras ---
   const totalWords = useMemo(() => books.reduce((sum, b) => sum + calculateWords(b.content), 0), [books]);
   const todayWords = Math.max(0, totalWords - (dayBaseline ? dayBaseline.words : totalWords));
@@ -1652,6 +2019,20 @@ export default function EstudioApp() {
       dbSet('settings', base, 'dayBaseline');
     }
   }, [isLoaded, dayBaseline, totalWords]);
+
+  // Registra as palavras escritas hoje (para as estatísticas)
+  useEffect(() => {
+    if (!isLoaded || !dayBaseline) return;
+    const today = todayKey();
+    if (dayBaseline.date !== today) return;
+    if ((writingLog[today] || 0) === todayWords) return;
+    const id = setTimeout(() => {
+      const next = { ...writingLog, [today]: todayWords };
+      setWritingLog(next);
+      dbSet('settings', next, 'writingLog');
+    }, 800);
+    return () => clearTimeout(id);
+  }, [isLoaded, dayBaseline, todayWords, writingLog]);
 
   // Versão automática a cada 5 minutos (só se o texto mudou)
   useEffect(() => {
@@ -1739,7 +2120,7 @@ export default function EstudioApp() {
         pdfRecords.push({ ...rest, fileData: blob ? await blobToDataUrl(blob) : null });
       }
       const settings = {};
-      for (const k of ['theme', 'readerPrefs', 'musicLinks', 'dailyGoal', 'readingProgress']) {
+      for (const k of ['theme', 'readerPrefs', 'musicLinks', 'dailyGoal', 'readingProgress', 'annotations', 'writingLog']) {
         const v = await dbGet('settings', k);
         if (v !== undefined && v !== null) settings[k] = v;
       }
@@ -1791,7 +2172,12 @@ export default function EstudioApp() {
           if (post && post.id && !posts.some(x => x.id === post.id)) await dbSet('posts', post);
         }
         for (const [k, v] of Object.entries(data.settings || {})) {
-          if (['readerPrefs', 'musicLinks', 'dailyGoal', 'readingProgress'].includes(k)) await dbSet('settings', v, k);
+          if (['readingProgress', 'annotations', 'writingLog', 'musicLinks'].includes(k)) {
+            const cur = (await dbGet('settings', k)) || {};
+            await dbSet('settings', { ...v, ...cur }, k);
+          } else if (['readerPrefs', 'dailyGoal'].includes(k) && (await dbGet('settings', k)) == null) {
+            await dbSet('settings', v, k);
+          }
         }
         if (data.profile && profile.name === 'Autor' && !profile.google) {
           await dbSet('settings', { ...data.profile, google: null }, 'profile');
@@ -1922,6 +2308,7 @@ export default function EstudioApp() {
             onTogglePublish={handleTogglePublishPdf}
             onSendFile={handleSendPdfFile}
             onOpenOriginal={handleOpenPdfOriginal}
+            onOrganize={openOrganize}
             showNotification={showNotification}
           />
         </div>
@@ -1988,8 +2375,15 @@ export default function EstudioApp() {
                 Manuscritos Ativos ({books.length})
               </h2>
 
+              {books.length > 0 && (
+                <FilterBar isDark={isDark} items={books} query={libQuery} setQuery={setLibQuery} collection={libCollection} setCollection={setLibCollection} tag={libTag} setTag={setLibTag} />
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {books.map((book) => (
+                {visibleBooks.length === 0 && (
+                  <p className="text-sm text-slate-500 col-span-full">Nenhum manuscrito encontrado com esses filtros.</p>
+                )}
+                {visibleBooks.map((book) => (
                   <div
                     key={book.id}
                     className={`group relative rounded-2xl border p-5 flex flex-col justify-between transition-all duration-200 hover:shadow-xl ${
@@ -2010,6 +2404,7 @@ export default function EstudioApp() {
                       <p className={`text-xs line-clamp-3 mb-4 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
                         {book.synopsis || 'Sem sinopse informada.'}
                       </p>
+                      <TagChips item={book} isDark={isDark} />
                     </div>
 
                     <div className={`flex items-center justify-between pt-3 border-t text-xs ${isDark ? 'border-slate-800/50' : 'border-slate-200'}`}>
@@ -2024,6 +2419,13 @@ export default function EstudioApp() {
                           title="Ler no Flipbook"
                         >
                           <BookOpen className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => openOrganize('book', book)}
+                          className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}
+                          title="Etiquetas e coleção"
+                        >
+                          <Tag className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleExportJSON(book)}
@@ -2669,6 +3071,8 @@ export default function EstudioApp() {
                 </div>
               </div>
             </div>
+
+            <WritingStats isDark={isDark} log={writingLog} goal={dailyGoal} todayWords={todayWords} />
           </div>
         )}
 
@@ -2726,6 +3130,75 @@ export default function EstudioApp() {
                 className="px-4 py-2 rounded-xl text-sm font-medium bg-red-600 hover:bg-red-500 text-white shadow-md"
               >
                 Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: ETIQUETAS E COLEÇÃO --- */}
+      {organizeTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setOrganizeTarget(null)}
+        >
+          <div
+            className={`max-w-md w-full border rounded-2xl p-6 shadow-xl space-y-4 ${
+              isDark ? 'border-slate-800 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white text-slate-900'
+            }`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="font-bold text-lg">Etiquetas e coleção</h3>
+            <p className="text-xs text-slate-500 truncate">{organizeTarget.item.title}</p>
+
+            <label className="block">
+              <span className="text-xs font-semibold text-slate-500">Etiquetas (separe por vírgula)</span>
+              <input
+                type="text"
+                value={tagsDraft}
+                onChange={(e) => setTagsDraft(e.target.value)}
+                maxLength={120}
+                placeholder="fantasia, revisar, favorito"
+                className={`mt-1 w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  isDark ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
+                }`}
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-xs font-semibold text-slate-500">Coleção (uma por item)</span>
+              <input
+                type="text"
+                list="colecoes-existentes"
+                value={collectionDraft}
+                onChange={(e) => setCollectionDraft(e.target.value)}
+                maxLength={40}
+                placeholder="Ex.: Projetos 2026"
+                className={`mt-1 w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  isDark ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
+                }`}
+              />
+              <datalist id="colecoes-existentes">
+                {allCollections.map(c => <option key={c} value={c} />)}
+              </datalist>
+            </label>
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setOrganizeTarget(null)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium border ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'}`}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={saveOrganize}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white shadow-md"
+              >
+                Salvar
               </button>
             </div>
           </div>
