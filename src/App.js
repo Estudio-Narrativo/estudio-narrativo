@@ -341,7 +341,7 @@ const APRENDIZAGEM_CONTEUDO = [
 
 // Crie um "OAuth Client ID" (tipo Aplicativo da Web) no Google Cloud Console e cole aqui.
 // Adicione a origem do app (ex.: http://localhost:5173) em "Origens JavaScript autorizadas".
-const GOOGLE_CLIENT_ID = 'COLE_SEU_CLIENT_ID.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '270217798059-nl55t440h1srsfq80tak0lm9gngf0oid.apps.googleusercontent.com';
 
 // Worker via CDN, na mesma versão instalada (evita problemas de bundling no react-scripts).
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
