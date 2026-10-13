@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
+import { createClient } from '@supabase/supabase-js';
 import {
   Edit3, FileText, Plus, Moon, Sun,
   X, Feather, Menu, FileUp,
@@ -951,7 +952,7 @@ const GoogleLinkCard = ({ google, isDark, onLink, onUnlink }) => {
 };
 
 // --- Aba "Leitura": PDFs + comunidade + música ---
-const ReadingTab = ({ isDark, pdfs, busy, publishedIds, communityReads, onUpload, onRead, onDelete, onTogglePublish, onSendFile, onOpenOriginal, onOrganize, showNotification }) => {
+const ReadingTab = ({ isDark, pdfs, busy, publishedIds, communityReads, onUpload, onRead, onDelete, onTogglePublish, onSendFile, onOpenOriginal, onOrganize, cloudActive, onCopyLink, showNotification }) => {
   const [fq, setFq] = useState('');
   const [fc, setFc] = useState('');
   const [ft, setFt] = useState('');
@@ -1018,9 +1019,15 @@ const ReadingTab = ({ isDark, pdfs, busy, publishedIds, communityReads, onUpload
                         <BookOpen className="w-3.5 h-3.5" /> Ler
                       </button>
                       <button type="button" onClick={() => onOpenOriginal(pdf)} className={ghost}>Abrir original</button>
-                      <button type="button" onClick={() => onTogglePublish(pdf)} className={ghost}>
-                        <Share2 className="w-3.5 h-3.5" /> {published ? 'Remover da comunidade' : 'Publicar na comunidade'}
+                      <button type="button" onClick={() => onTogglePublish(pdf, 'public')} className={ghost}>
+                        <Share2 className="w-3.5 h-3.5" /> {published ? 'Remover compartilhamento' : 'Publicar na comunidade'}
                       </button>
+                      {!published && cloudActive && (
+                        <button type="button" onClick={() => onTogglePublish(pdf, 'link')} className={ghost}>Compartilhar por link</button>
+                      )}
+                      {published && pdf.shareToken && (
+                        <button type="button" onClick={() => onCopyLink(pdf.shareToken)} className={ghost}>Copiar link</button>
+                      )}
                       <button type="button" onClick={() => onOrganize('pdf', pdf)} className={ghost}><Tag className="w-3.5 h-3.5" /> Etiquetas</button>
                       <button type="button" onClick={() => onSendFile(pdf)} className={ghost}>Enviar arquivo</button>
                       <button type="button" onClick={() => onDelete(pdf)} className="p-2 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors ml-auto" title="Remover PDF">
@@ -1047,7 +1054,7 @@ const ReadingTab = ({ isDark, pdfs, busy, publishedIds, communityReads, onUpload
                     <h4 className="font-semibold text-sm truncate">{item.title}</h4>
                     <p className="text-xs text-slate-500 truncate">{item.kind === 'pdf' ? 'PDF' : 'Livro'} • {item.meta} • por {item.author} (@{item.handle})</p>
                   </div>
-                  <button type="button" onClick={() => onRead({ title: item.title, content: item.content, key: `post:${item.id}` })} className={`${ghost} text-indigo-400`}>
+                  <button type="button" onClick={() => onRead({ title: item.title, content: item.content, postId: item.id, key: `post:${item.id}` })} className={`${ghost} text-indigo-400`}>
                     <BookOpen className="w-3.5 h-3.5" /> Ler
                   </button>
                 </div>
@@ -1327,6 +1334,193 @@ const WritingStats = ({ isDark, log, goal, todayWords }) => {
   );
 };
 
+// --- NUVEM (Supabase): contas, sincronização e comunidade ---
+// As duas chaves abaixo são configuradas no Render (Environment). Sem elas, o app funciona só no navegador.
+const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
+const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+const bookToRow = (uid, b) => ({
+  user_id: uid,
+  id: b.id,
+  title: b.title || '',
+  author: b.author || '',
+  genre: b.genre || '',
+  cover_color: b.coverColor || '',
+  synopsis: b.synopsis || '',
+  content: b.content || '',
+  tags: b.tags || [],
+  collection: b.collection || '',
+  updated_ms: b.updatedAt || Date.now(),
+  deleted: false
+});
+
+const rowToBook = (r) => ({
+  id: r.id,
+  title: r.title,
+  author: r.author,
+  genre: r.genre,
+  coverColor: r.cover_color || 'from-blue-600 to-indigo-800',
+  synopsis: r.synopsis,
+  content: r.content,
+  tags: r.tags || [],
+  collection: r.collection || '',
+  updatedAt: Number(r.updated_ms) || 0
+});
+
+const pdfToRow = (uid, p) => ({
+  user_id: uid,
+  id: p.id,
+  title: p.title || '',
+  file_name: p.fileName || '',
+  size: p.size || '',
+  num_pages: p.numPages || 0,
+  scanned: !!p.scanned,
+  tags: p.tags || [],
+  collection: p.collection || '',
+  uploaded_at: p.uploadedAt || '',
+  updated_ms: p.updatedAt || Date.now(),
+  deleted: false
+});
+
+const rowToPdfMeta = (r) => ({
+  id: r.id,
+  title: r.title,
+  fileName: r.file_name,
+  size: r.size,
+  numPages: r.num_pages,
+  scanned: r.scanned,
+  tags: r.tags || [],
+  collection: r.collection || '',
+  uploadedAt: r.uploaded_at,
+  updatedAt: Number(r.updated_ms) || 0
+});
+
+const cloudPushBook = async (uid, book) => {
+  const { error } = await supabase.from('books').upsert(bookToRow(uid, book));
+  if (error) console.error('Erro ao enviar manuscrito:', error);
+  return !error;
+};
+
+const cloudDeleteBook = async (uid, id) => {
+  const { error } = await supabase.from('books').upsert({
+    user_id: uid, id, title: '', author: '', genre: '', cover_color: '', synopsis: '', content: '',
+    tags: [], collection: '', updated_ms: Date.now(), deleted: true
+  });
+  if (error) console.error('Erro ao remover manuscrito na nuvem:', error);
+};
+
+const cloudPushPdfMeta = async (uid, pdf) => {
+  const { error } = await supabase.from('pdfs').upsert(pdfToRow(uid, pdf));
+  if (error) console.error('Erro ao enviar dados do PDF:', error);
+  return !error;
+};
+
+const cloudPushPdf = async (uid, pdf) => {
+  if (!pdf.blob) return false;
+  const up = await supabase.storage.from('pdfs').upload(`${uid}/${pdf.id}.pdf`, pdf.blob, { upsert: true, contentType: 'application/pdf' });
+  if (up.error) { console.error('Erro ao enviar arquivo PDF:', up.error); return false; }
+  return cloudPushPdfMeta(uid, pdf);
+};
+
+const cloudDeletePdf = async (uid, id) => {
+  await supabase.storage.from('pdfs').remove([`${uid}/${id}.pdf`]);
+  const { error } = await supabase.from('pdfs').upsert({
+    user_id: uid, id, title: '', file_name: '', size: '', num_pages: 0, scanned: false,
+    tags: [], collection: '', uploaded_at: '', updated_ms: Date.now(), deleted: true
+  });
+  if (error) console.error('Erro ao remover PDF na nuvem:', error);
+};
+
+const mapCloudPost = (row, uid) => ({
+  id: row.id,
+  isMine: row.author_id === uid,
+  authorId: row.author_id,
+  authorName: (row.author && row.author.name) || 'Autor',
+  authorHandle: (row.author && row.author.handle) || 'autor',
+  authorColor: (row.author && row.author.avatar_color) || AVATAR_GRADIENTS[0],
+  authorPicture: (row.author && row.author.avatar_url) || '',
+  text: row.text || '',
+  createdAt: row.created_at,
+  likes: (row.likes || []).length,
+  likedByMe: (row.likes || []).some(l => l.user_id === uid),
+  comments: (row.comments || [])
+    .map(c => ({
+      id: c.id,
+      isMine: c.author_id === uid,
+      authorName: (c.author && c.author.name) || 'Autor',
+      text: c.text,
+      createdAt: c.created_at
+    }))
+    .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))),
+  sharedBook: row.shared_book || null,
+  sharedPdf: row.shared_pdf || null,
+  visibility: row.visibility,
+  shareToken: row.share_token,
+  pdfId: row.pdf_id || null
+});
+
+const cloudFetchPosts = async (uid) => {
+  const { data, error } = await supabase
+    .from('posts')
+    .select('id, author_id, text, shared_book, shared_pdf, visibility, share_token, pdf_id, created_at, author:profiles(name, handle, avatar_color, avatar_url), comments(id, author_id, text, created_at, author:profiles(name)), likes(user_id)')
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return (data || []).map(row => mapCloudPost(row, uid));
+};
+
+// O texto completo de um PDF compartilhado só é baixado quando alguém abre para ler
+const cloudFetchPostText = async (postId) => {
+  const { data, error } = await supabase.from('posts').select('shared_text').eq('id', postId).maybeSingle();
+  if (error || !data) return '';
+  return data.shared_text || '';
+};
+
+const AccountCard = ({ isDark, session, onSignIn, onSignOut, blockedCount, onUnblockAll }) => {
+  const user = session && session.user;
+  const meta = (user && user.user_metadata) || {};
+  const picture = meta.avatar_url || meta.picture || '';
+  return (
+    <div className={`w-full mt-6 pt-6 border-t text-left ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+      <p className="text-xs font-semibold text-slate-500 mb-3">Conta</p>
+      {user ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            {picture && <img src={picture} alt="" referrerPolicy="no-referrer" className="w-9 h-9 rounded-full" />}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold truncate">{meta.full_name || meta.name || 'Conta Google'}</p>
+              <p className="text-xs text-slate-500 truncate">{user.email}</p>
+            </div>
+            <button type="button" onClick={onSignOut} className="p-2 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors" title="Sair da conta">
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-xs text-emerald-500">Sincronização ativa: seus textos e PDFs acompanham você em qualquer aparelho.</p>
+          {blockedCount > 0 && (
+            <button type="button" onClick={onUnblockAll} className="text-xs underline text-slate-500">
+              Desbloquear {blockedCount} {blockedCount === 1 ? 'usuário' : 'usuários'}
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={onSignIn}
+            className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
+              isDark ? 'border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200' : 'border-slate-300 bg-white hover:bg-slate-50 text-slate-700'
+            }`}
+          >
+            Entrar com Google
+          </button>
+          <p className="text-xs text-slate-500">Entre para sincronizar seus textos e PDFs e participar da comunidade.</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // --- COMPONENTE PRINCIPAL ---
 
 export default function EstudioApp() {
@@ -1358,6 +1552,16 @@ export default function EstudioApp() {
   const [tagsDraft, setTagsDraft] = useState('');
   const [collectionDraft, setCollectionDraft] = useState('');
   const [writingLog, setWritingLog] = useState({});
+
+  // Conta e nuvem
+  const [session, setSession] = useState(null);
+  const [blockedIds, setBlockedIds] = useState([]);
+  const sessionUid = session && session.user ? session.user.id : null;
+  const cloudOn = !!(supabase && session);
+  const booksRef = useRef([]);
+  const pdfsRef = useRef([]);
+  booksRef.current = books;
+  pdfsRef.current = pdfs;
 
   const [selectedBookId, setSelectedBookId] = useState('');
   const [saveStatus, setSaveStatus] = useState('salvo');
@@ -1496,11 +1700,12 @@ export default function EstudioApp() {
     setSaveStatus('salvando');
     const handler = setTimeout(async () => {
       const success = await dbSet('books', targetBook);
+      if (success && supabase && sessionUid) cloudPushBook(sessionUid, targetBook);
       setSaveStatus(success ? 'salvo' : 'erro');
     }, 1000);
 
     return () => clearTimeout(handler);
-  }, [books, selectedBookId, isLoaded]);
+  }, [books, selectedBookId, isLoaded, sessionUid]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -1529,16 +1734,17 @@ export default function EstudioApp() {
   };
 
   const handleTitleChange = (newTitle) => {
-    setBooks(prev => prev.map(b => (b.id === selectedBookId ? { ...b, title: newTitle } : b)));
+    setBooks(prev => prev.map(b => (b.id === selectedBookId ? { ...b, title: newTitle, updatedAt: Date.now() } : b)));
   };
 
   const handleContentChange = (newContent) => {
-    setBooks(prev => prev.map(b => (b.id === selectedBookId ? { ...b, content: newContent } : b)));
+    setBooks(prev => prev.map(b => (b.id === selectedBookId ? { ...b, content: newContent, updatedAt: Date.now() } : b)));
   };
 
   const handleCreateNewBook = () => {
     const newBook = {
       id: `b_${Date.now()}`,
+      updatedAt: Date.now(),
       title: 'Novo Manuscrito',
       author: 'Autor',
       genre: 'Geral',
@@ -1568,6 +1774,7 @@ export default function EstudioApp() {
       setBooks(filtered);
       await dbDelete('books', id);
       await dbDelete('settings', `history:${id}`);
+      if (cloudOn) cloudDeleteBook(sessionUid, id);
       if (selectedBookId === id && filtered.length > 0) {
         setSelectedBookId(filtered[0].id);
       }
@@ -1681,6 +1888,15 @@ export default function EstudioApp() {
     setProfile(clean);
     setProfileDraft(clean);
     const ok = await dbSet('settings', clean, 'profile');
+    if (cloudOn) {
+      const { error } = await supabase.from('profiles').update({
+        name: clean.name, handle: clean.handle, bio: clean.bio, favorite_genre: clean.favoriteGenre, avatar_color: clean.avatarColor
+      }).eq('id', sessionUid);
+      if (error) {
+        showNotification(error.code === '23505' ? 'Esse @usuário já está em uso. Escolha outro.' : 'Perfil salvo só neste aparelho (erro ao enviar para a nuvem).');
+        return;
+      }
+    }
     showNotification(ok ? 'Perfil atualizado!' : 'Erro ao salvar o perfil.');
   };
 
@@ -1696,9 +1912,12 @@ export default function EstudioApp() {
 
   // --- COMUNIDADE ---
   const sortedPosts = useMemo(() => {
-    const list = feedFilter === 'mine' ? posts.filter(p => p.isMine) : posts;
+    const base = (supabase && !session)
+      ? []
+      : posts.filter(p => p.visibility !== 'link' && !blockedIds.includes(p.authorId));
+    const list = feedFilter === 'mine' ? base.filter(p => p.isMine) : base;
     return [...list].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-  }, [posts, feedFilter]);
+  }, [posts, feedFilter, session, blockedIds]);
 
   const updatePost = async (id, updater) => {
     const target = posts.find(p => p.id === id);
@@ -1713,6 +1932,32 @@ export default function EstudioApp() {
     const book = books.find(b => b.id === shareBookId);
     if (!text && !book) {
       showNotification('Escreva algo ou escolha um manuscrito para compartilhar.');
+      return;
+    }
+    if (supabase && !session) {
+      showNotification('Entre com sua conta Google (aba Perfil) para publicar na comunidade.');
+      return;
+    }
+    if (cloudOn) {
+      if (book && !(await confirmPublishTerms())) return;
+      const { error } = await supabase.from('posts').insert({
+        author_id: sessionUid,
+        text,
+        visibility: 'public',
+        shared_book: book
+          ? { title: book.title, genre: book.genre, synopsis: book.synopsis, excerpt: (book.content || '').slice(0, 2000) }
+          : null
+      });
+      if (error) {
+        console.error(error);
+        showNotification('Não foi possível publicar agora.');
+        return;
+      }
+      setNewPostText('');
+      setShareBookId('');
+      setFeedFilter('all');
+      await refreshPosts();
+      showNotification('Publicado na comunidade!');
       return;
     }
     const post = {
@@ -1744,6 +1989,7 @@ export default function EstudioApp() {
   };
 
   const handleToggleLike = (id) => {
+    if (cloudOn) { cloudToggleLike(id); return; }
     updatePost(id, p => ({
       ...p,
       likedByMe: !p.likedByMe,
@@ -1754,6 +2000,7 @@ export default function EstudioApp() {
   const handleAddComment = (id) => {
     const text = sanitizeInput(commentDrafts[id] || '').slice(0, 500);
     if (!text) return;
+    if (cloudOn) { cloudAddComment(id, text); setCommentDrafts(prev => ({ ...prev, [id]: '' })); return; }
     updatePost(id, p => ({
       ...p,
       comments: [
@@ -1765,9 +2012,278 @@ export default function EstudioApp() {
   };
 
   const handleDeletePost = async (id) => {
+    if (cloudOn) { await cloudDeletePost(id); return; }
     setPosts(prev => prev.filter(p => p.id !== id));
     await dbDelete('posts', id);
     showNotification('Publicação removida.');
+  };
+
+  // --- AÇÕES NA NUVEM (só com login) ---
+  const refreshPosts = async () => {
+    if (!cloudOn) return;
+    try {
+      setPosts(await cloudFetchPosts(sessionUid));
+    } catch (err) {
+      console.error('Erro ao atualizar a comunidade:', err);
+    }
+  };
+
+  const confirmPublishTerms = async () => {
+    if (await dbGet('settings', 'termsAccepted')) return true;
+    const ok = window.confirm(
+      'Antes de publicar: você declara ter o direito de compartilhar este conteúdo (obra própria, domínio público ou com autorização do autor). ' +
+      'Conteúdo ofensivo, ilegal ou protegido por direitos autorais pode ser denunciado e removido, e a conta pode ser suspensa. Deseja continuar?'
+    );
+    if (ok) await dbSet('settings', true, 'termsAccepted');
+    return ok;
+  };
+
+  const cloudToggleLike = async (id) => {
+    const post = posts.find(p => p.id === id);
+    if (!post) return;
+    setPosts(prev => prev.map(p => (p.id === id
+      ? { ...p, likedByMe: !p.likedByMe, likes: Math.max(0, p.likes + (p.likedByMe ? -1 : 1)) }
+      : p)));
+    const { error } = post.likedByMe
+      ? await supabase.from('likes').delete().eq('post_id', id).eq('user_id', sessionUid)
+      : await supabase.from('likes').insert({ post_id: id, user_id: sessionUid });
+    if (error) {
+      showNotification('Não foi possível curtir agora.');
+      await refreshPosts();
+    }
+  };
+
+  const cloudAddComment = async (id, text) => {
+    const { error } = await supabase.from('comments').insert({ post_id: id, author_id: sessionUid, text });
+    if (error) {
+      showNotification('Não foi possível comentar agora.');
+      return;
+    }
+    await refreshPosts();
+  };
+
+  const cloudDeletePost = async (id) => {
+    const { error } = await supabase.from('posts').delete().eq('id', id);
+    if (error) {
+      showNotification('Não foi possível remover agora.');
+      return;
+    }
+    setPosts(prev => prev.filter(p => p.id !== id));
+    showNotification('Publicação removida.');
+  };
+
+  const cloudTogglePublishPdf = async (pdf, visibility) => {
+    const mine = posts.find(p => p.isMine && p.pdfId === pdf.id);
+    if (mine) { await cloudDeletePost(mine.id); return; }
+    if (pdf.scanned) {
+      showNotification('Este PDF não tem texto para compartilhar no leitor.');
+      return;
+    }
+    if ((pdf.text || '').length > 3000000) {
+      showNotification('Este PDF é grande demais para compartilhar (limite de cerca de 3 milhões de caracteres).');
+      return;
+    }
+    if (!(await confirmPublishTerms())) return;
+    const { error } = await supabase.from('posts').insert({
+      author_id: sessionUid,
+      text: '',
+      visibility,
+      pdf_id: pdf.id,
+      shared_pdf: { title: pdf.title, numPages: pdf.numPages },
+      shared_text: pdf.text
+    });
+    if (error) {
+      console.error(error);
+      showNotification('Não foi possível compartilhar este PDF agora.');
+      return;
+    }
+    await refreshPosts();
+    showNotification(visibility === 'link' ? 'Link criado! Use "Copiar link" para enviar a quem quiser.' : 'PDF publicado na comunidade!');
+  };
+
+  const handleCopyLink = async (token) => {
+    const url = `${window.location.origin}/?p=${token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      showNotification('Link copiado!');
+    } catch {
+      window.prompt('Copie o link abaixo:', url);
+    }
+  };
+
+  const handleReportPost = async (post) => {
+    const reason = window.prompt('Por que você quer denunciar esta publicação? (opcional)');
+    if (reason === null) return;
+    const { error } = await supabase.from('reports').insert({
+      post_id: post.id,
+      reporter_id: sessionUid,
+      reason: sanitizeInput(reason).slice(0, 300)
+    });
+    showNotification(error ? 'Não foi possível enviar a denúncia.' : 'Denúncia enviada. Obrigado!');
+  };
+
+  const handleBlockUser = async (post) => {
+    if (!window.confirm(`Bloquear ${post.authorName}? As publicações dessa pessoa deixarão de aparecer para você.`)) return;
+    const { error } = await supabase.from('blocks').insert({ blocker_id: sessionUid, blocked_id: post.authorId });
+    if (error) {
+      showNotification('Não foi possível bloquear agora.');
+      return;
+    }
+    setBlockedIds(prev => [...prev, post.authorId]);
+    showNotification('Usuário bloqueado.');
+  };
+
+  const handleUnblockAll = async () => {
+    await supabase.from('blocks').delete().eq('blocker_id', sessionUid);
+    setBlockedIds([]);
+    showNotification('Bloqueios removidos.');
+  };
+
+  const handleSignIn = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+    if (error) showNotification('Não foi possível iniciar o login com o Google.');
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    await dbSet('settings', { ...profile, google: null }, 'profile');
+    window.location.reload();
+  };
+
+  // Sincroniza perfil, manuscritos, PDFs e comunidade ao entrar
+  const syncCloud = async (user) => {
+    const uid = user.id;
+    const meta = user.user_metadata || {};
+    try {
+      // 1) Perfil
+      const { data: prof } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
+      let base = prof;
+      const cloudIsFresh = prof && !prof.bio && !prof.favorite_genre && !prof.avatar_color;
+      if (prof && cloudIsFresh && profile.name && profile.name !== 'Autor') {
+        const patch = {
+          name: profile.name,
+          bio: profile.bio || '',
+          favorite_genre: profile.favoriteGenre || '',
+          avatar_color: profile.avatarColor || AVATAR_GRADIENTS[0]
+        };
+        const { error: e1 } = await supabase.from('profiles').update(patch).eq('id', uid);
+        if (!e1) base = { ...prof, ...patch };
+        if (profile.handle && profile.handle !== 'autor') {
+          const { error: e2 } = await supabase.from('profiles').update({ handle: profile.handle }).eq('id', uid);
+          if (!e2) base = { ...base, handle: profile.handle };
+        }
+      }
+      const google = {
+        sub: uid,
+        email: user.email || '',
+        name: meta.full_name || meta.name || '',
+        picture: meta.avatar_url || meta.picture || '',
+        linkedAt: new Date().toISOString()
+      };
+      const nextProfile = {
+        name: (base && base.name) || google.name || 'Autor',
+        handle: (base && base.handle) || 'autor',
+        bio: (base && base.bio) || '',
+        favoriteGenre: (base && base.favorite_genre) || '',
+        avatarColor: (base && base.avatar_color) || AVATAR_GRADIENTS[0],
+        google
+      };
+      setProfile(nextProfile);
+      setProfileDraft(nextProfile);
+      await dbSet('settings', nextProfile, 'profile');
+
+      // 2) Manuscritos (vale a edição mais recente; exclusões também sincronizam)
+      const { data: bRows, error: bErr } = await supabase.from('books').select('*').eq('user_id', uid);
+      if (bErr) throw bErr;
+      let mergedBooks = [...booksRef.current];
+      const pushBooks = [];
+      const cloudBookIds = new Set();
+      for (const r of bRows || []) {
+        cloudBookIds.add(r.id);
+        const local = mergedBooks.find(b => b.id === r.id);
+        const cloudMs = Number(r.updated_ms) || 0;
+        const localMs = (local && local.updatedAt) || 0;
+        if (r.deleted) {
+          if (local && localMs <= cloudMs) {
+            mergedBooks = mergedBooks.filter(b => b.id !== r.id);
+            await dbDelete('books', r.id);
+          } else if (local) {
+            pushBooks.push(local);
+          }
+        } else if (!local) {
+          const nb = rowToBook(r);
+          mergedBooks.unshift(nb);
+          await dbSet('books', nb);
+        } else if (cloudMs > localMs) {
+          const nb = { ...local, ...rowToBook(r) };
+          mergedBooks = mergedBooks.map(b => (b.id === r.id ? nb : b));
+          await dbSet('books', nb);
+        } else if (localMs > cloudMs) {
+          pushBooks.push(local);
+        }
+      }
+      for (const b of mergedBooks) {
+        if (!cloudBookIds.has(b.id) && !(b.id === 'b1' && !b.updatedAt)) pushBooks.push(b);
+      }
+      for (let i = 0; i < pushBooks.length; i += 10) {
+        const { error } = await supabase.from('books').upsert(pushBooks.slice(i, i + 10).map(b => bookToRow(uid, b)));
+        if (error) console.error('Erro ao enviar manuscritos:', error);
+      }
+      setBooks(mergedBooks);
+      setSelectedBookId(prev => (mergedBooks.some(b => b.id === prev) ? prev : (mergedBooks[0] ? mergedBooks[0].id : '')));
+
+      // 3) PDFs
+      const { data: pRows, error: pErr } = await supabase.from('pdfs').select('*').eq('user_id', uid);
+      if (pErr) throw pErr;
+      let mergedPdfs = [...pdfsRef.current];
+      const cloudPdfIds = new Set();
+      const toDownload = [];
+      for (const r of pRows || []) {
+        cloudPdfIds.add(r.id);
+        const local = mergedPdfs.find(x => x.id === r.id);
+        const cloudMs = Number(r.updated_ms) || 0;
+        const localMs = (local && local.updatedAt) || 0;
+        if (r.deleted) {
+          if (local) {
+            mergedPdfs = mergedPdfs.filter(x => x.id !== r.id);
+            await dbDelete('pdfs', r.id);
+          }
+        } else if (!local) {
+          toDownload.push(r);
+        } else if (cloudMs > localMs) {
+          const np = { ...local, ...rowToPdfMeta(r) };
+          mergedPdfs = mergedPdfs.map(x => (x.id === r.id ? np : x));
+          await dbSet('pdfs', np);
+        } else if (localMs > cloudMs) {
+          await cloudPushPdfMeta(uid, local);
+        }
+      }
+      for (const x of mergedPdfs) {
+        if (!cloudPdfIds.has(x.id)) await cloudPushPdf(uid, x);
+      }
+      setPdfs(mergedPdfs);
+      if (toDownload.length > 0) {
+        showNotification('Baixando seus PDFs da nuvem...');
+        for (const r of toDownload) {
+          const { data: blob } = await supabase.storage.from('pdfs').download(`${uid}/${r.id}.pdf`);
+          if (!blob) continue;
+          const { numPages, text } = await extractPdf(await blob.arrayBuffer());
+          const rec = { ...rowToPdfMeta(r), numPages, text, blob, sharedPostId: null };
+          await dbSet('pdfs', rec);
+          setPdfs(prev => [rec, ...prev.filter(x => x.id !== rec.id)]);
+        }
+      }
+
+      // 4) Comunidade e bloqueios
+      const { data: blocks } = await supabase.from('blocks').select('blocked_id').eq('blocker_id', uid);
+      setBlockedIds((blocks || []).map(b => b.blocked_id));
+      setPosts(await cloudFetchPosts(uid));
+
+      showNotification('Conta sincronizada!');
+    } catch (err) {
+      console.error('Erro na sincronização:', err);
+      showNotification('Não foi possível sincronizar agora. Tentaremos de novo ao reabrir o app.');
+    }
   };
 
   // --- PDFs ---
@@ -1787,6 +2303,7 @@ export default function EstudioApp() {
       const scanned = text.replace(/\s/g, '').length < numPages * 40;
       const record = {
         id: `pdf_${Date.now()}`,
+        updatedAt: Date.now(),
         title: sanitizeInput(file.name.replace(/\.[^.]+$/, '')).slice(0, 100) || 'PDF',
         fileName: sanitizeInput(file.name).slice(0, 120),
         size: formatFileSize(file.size),
@@ -1799,6 +2316,11 @@ export default function EstudioApp() {
       };
       const ok = await dbSet('pdfs', record);
       setPdfs(prev => [record, ...prev]);
+      if (cloudOn) {
+        cloudPushPdf(sessionUid, record).then(okCloud => {
+          if (!okCloud) showNotification('PDF salvo só neste aparelho (falha ao enviar para a nuvem).');
+        });
+      }
       showNotification(
         !ok ? 'PDF aberto, mas não foi possível salvá-lo no navegador.'
           : scanned ? 'PDF adicionado, mas sem texto selecionável (provável escaneado).'
@@ -1816,10 +2338,16 @@ export default function EstudioApp() {
     if (pdf.sharedPostId) await handleDeletePost(pdf.sharedPostId);
     setPdfs(prev => prev.filter(p => p.id !== pdf.id));
     await dbDelete('pdfs', pdf.id);
+    if (cloudOn) cloudDeletePdf(sessionUid, pdf.id);
     showNotification('PDF removido.');
   };
 
-  const handleTogglePublishPdf = async (pdf) => {
+  const handleTogglePublishPdf = async (pdf, visibility = 'public') => {
+    if (supabase && !session) {
+      showNotification('Entre com sua conta Google (aba Perfil) para compartilhar.');
+      return;
+    }
+    if (cloudOn) { await cloudTogglePublishPdf(pdf, visibility); return; }
     const isPublished = !!pdf.sharedPostId && posts.some(p => p.id === pdf.sharedPostId);
     if (isPublished) {
       await handleDeletePost(pdf.sharedPostId);
@@ -1877,8 +2405,13 @@ export default function EstudioApp() {
 
   const publishedIds = useMemo(() => new Set(posts.map(p => p.id)), [posts]);
 
+  const pdfsView = useMemo(() => pdfs.map(x => {
+    const mine = posts.find(post => post.isMine && post.pdfId === x.id);
+    return mine ? { ...x, sharedPostId: mine.id, shareToken: mine.shareToken } : x;
+  }), [pdfs, posts]);
+
   const communityReads = useMemo(() => posts
-    .filter(p => !p.isMine && (p.sharedBook || p.sharedPdf))
+    .filter(p => (!supabase || !!session) && !p.isMine && !blockedIds.includes(p.authorId) && (p.sharedBook || p.sharedPdf))
     .map(p => ({
       id: p.id,
       kind: p.sharedPdf ? 'pdf' : 'book',
@@ -1887,7 +2420,7 @@ export default function EstudioApp() {
       handle: p.authorHandle,
       meta: p.sharedPdf ? `${p.sharedPdf.numPages} páginas` : (p.sharedBook.genre || 'Geral'),
       content: p.sharedPdf ? p.sharedPdf.text : p.sharedBook.excerpt
-    })), [posts]);
+    })), [posts, session, blockedIds]);
 
   // --- CONTA GOOGLE ---
   const handleGoogleLink = async (g) => {
@@ -1938,8 +2471,17 @@ export default function EstudioApp() {
     return resultPages.length > 0 ? resultPages : ['Sem conteúdo para exibição.'];
   }, [flipbookBook]);
 
-  const openFlipbook = (book) => {
-    setFlipbookBook(book);
+  const openFlipbook = async (book) => {
+    let target = book;
+    if (book.postId && !book.content && supabase) {
+      const text = await cloudFetchPostText(book.postId);
+      if (!text) {
+        showNotification('Não foi possível carregar este texto agora.');
+        return;
+      }
+      target = { ...book, content: text };
+    }
+    setFlipbookBook(target);
     setCurrentPageIndex(0);
     setFlipbookActive(true);
   };
@@ -1992,13 +2534,15 @@ export default function EstudioApp() {
     const collection = sanitizeInput(collectionDraft).slice(0, 40);
     const { kind, item } = organizeTarget;
     if (kind === 'book') {
-      const updated = { ...(books.find(b => b.id === item.id) || item), tags, collection };
+      const updated = { ...(books.find(b => b.id === item.id) || item), tags, collection, updatedAt: Date.now() };
       setBooks(prev => prev.map(b => (b.id === item.id ? updated : b)));
       await dbSet('books', updated);
+      if (cloudOn) cloudPushBook(sessionUid, updated);
     } else {
-      const updated = { ...(pdfs.find(x => x.id === item.id) || item), tags, collection };
+      const updated = { ...(pdfs.find(x => x.id === item.id) || item), tags, collection, updatedAt: Date.now() };
       setPdfs(prev => prev.map(x => (x.id === item.id ? updated : x)));
       await dbSet('pdfs', updated);
+      if (cloudOn) cloudPushPdfMeta(sessionUid, updated);
     }
     setOrganizeTarget(null);
     showNotification('Etiquetas e coleção salvas!');
@@ -2019,6 +2563,64 @@ export default function EstudioApp() {
       dbSet('settings', base, 'dayBaseline');
     }
   }, [isLoaded, dayBaseline, totalWords]);
+
+  // Sessão (login com Google via Supabase)
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // Sincroniza uma vez por login
+  useEffect(() => {
+    if (!supabase || !sessionUid || !isLoaded) return;
+    syncCloud(session.user);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionUid, isLoaded]);
+
+  // Mantém a comunidade atualizada enquanto a aba está aberta
+  useEffect(() => {
+    if (!supabase || !sessionUid || activeTab !== 'community') return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const list = await cloudFetchPosts(sessionUid);
+        if (!cancelled) setPosts(list);
+      } catch (err) {
+        console.error('Erro ao carregar a comunidade:', err);
+      }
+    };
+    load();
+    const id = setInterval(load, 45000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [sessionUid, activeTab]);
+
+  // Abre links de compartilhamento (?p=...) mesmo para quem não tem conta
+  useEffect(() => {
+    if (!isLoaded) return;
+    const token = new URLSearchParams(window.location.search).get('p');
+    if (!token) return;
+    window.history.replaceState({}, '', window.location.pathname);
+    if (!supabase) {
+      showNotification('Este link precisa da versão do app com contas ativada.');
+      return;
+    }
+    (async () => {
+      const { data, error } = await supabase.rpc('get_post_by_token', { p_token: token });
+      const row = Array.isArray(data) ? data[0] : data;
+      if (error || !row) {
+        showNotification('Link inválido ou removido.');
+        return;
+      }
+      const sp = row.shared_pdf;
+      const sb = row.shared_book;
+      const name = sp ? sp.title : (sb ? sb.title : 'Texto compartilhado');
+      const content = sp ? row.shared_text : (sb ? sb.excerpt : row.text);
+      openFlipbook({ title: `${name} — por ${row.author_name}`, content: content || row.text || '', key: `post:${row.id}` });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded]);
 
   // Registra as palavras escritas hoje (para as estatísticas)
   useEffect(() => {
@@ -2298,7 +2900,7 @@ export default function EstudioApp() {
         <div className={activeTab === 'reading' ? '' : 'hidden'}>
           <ReadingTab
             isDark={isDark}
-            pdfs={pdfs}
+            pdfs={pdfsView}
             busy={pdfBusy}
             publishedIds={publishedIds}
             communityReads={communityReads}
@@ -2309,6 +2911,8 @@ export default function EstudioApp() {
             onSendFile={handleSendPdfFile}
             onOpenOriginal={handleOpenPdfOriginal}
             onOrganize={openOrganize}
+            cloudActive={cloudOn}
+            onCopyLink={handleCopyLink}
             showNotification={showNotification}
           />
         </div>
@@ -2757,7 +3361,9 @@ export default function EstudioApp() {
                 Compartilhe trechos, troque ideias e dê feedback a outros autores.
               </p>
               <p className={`text-xs mt-2 ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
-                As publicações ficam salvas apenas neste navegador. Os posts de Marina e Caio são exemplos.
+                {supabase
+                  ? (session ? 'Publicações compartilhadas com todos os usuários do app.' : 'Entre com sua conta Google (aba Perfil) para ver e publicar na comunidade.')
+                  : 'As publicações ficam salvas apenas neste navegador. Os posts de Marina e Caio são exemplos.'}
               </p>
             </div>
 
@@ -2833,12 +3439,19 @@ export default function EstudioApp() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <Avatar name={authorName} color={authorColor} />
+                        <Avatar name={authorName} color={authorColor} src={post.isMine ? (profile.google && profile.google.picture) : post.authorPicture} />
                         <div className="min-w-0">
                           <p className="font-semibold text-sm truncate">{authorName}</p>
                           <p className="text-xs text-slate-500 truncate">@{authorHandle} • {formatPostDate(post.createdAt)}</p>
                         </div>
                       </div>
+
+                      {!post.isMine && cloudOn && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => handleReportPost(post)} className="px-2 py-1 rounded-lg text-xs text-slate-500 hover:bg-slate-500/10 transition-colors" title="Denunciar publicação">Denunciar</button>
+                          <button onClick={() => handleBlockUser(post)} className="px-2 py-1 rounded-lg text-xs text-slate-500 hover:bg-slate-500/10 transition-colors" title="Bloquear usuário">Bloquear</button>
+                        </div>
+                      )}
 
                       {post.isMine && (
                         <button
@@ -2886,7 +3499,7 @@ export default function EstudioApp() {
                           <p className="text-xs text-indigo-400">PDF • {post.sharedPdf.numPages} páginas</p>
                         </div>
                         <button
-                          onClick={() => openFlipbook({ title: post.sharedPdf.title, content: post.sharedPdf.text, key: `post:${post.id}` })}
+                          onClick={() => openFlipbook({ title: post.sharedPdf.title, content: post.sharedPdf.text, postId: post.id, key: `post:${post.id}` })}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs text-indigo-400 whitespace-nowrap transition-colors ${
                             isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'
                           }`}
@@ -2978,7 +3591,18 @@ export default function EstudioApp() {
                   {profile.bio || 'Nenhuma bio ainda.'}
                 </p>
 
-                <GoogleLinkCard google={profile.google} isDark={isDark} onLink={handleGoogleLink} onUnlink={handleGoogleUnlink} />
+                {supabase ? (
+                  <AccountCard
+                    isDark={isDark}
+                    session={session}
+                    onSignIn={handleSignIn}
+                    onSignOut={handleSignOut}
+                    blockedCount={blockedIds.length}
+                    onUnblockAll={handleUnblockAll}
+                  />
+                ) : (
+                  <GoogleLinkCard google={profile.google} isDark={isDark} onLink={handleGoogleLink} onUnlink={handleGoogleUnlink} />
+                )}
 
                 <div className={`grid grid-cols-2 gap-3 w-full mt-6 pt-6 border-t ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
                   {[
