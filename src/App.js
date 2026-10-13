@@ -7,7 +7,7 @@ import {
   GraduationCap, Compass, Users, Lightbulb, TrendingUp, Search,
   Trash2, Download, Upload, ChevronLeft, ChevronRight, BookOpen,
   User, Heart, MessageCircle, Send, Globe,
-  Music, Play, Pause, SkipBack, SkipForward, Volume2, Share2, LogOut, Timer, Tag
+  Music, Play, Pause, SkipBack, SkipForward, Volume2, Share2, LogOut, Timer, Tag, MoreHorizontal
 } from 'lucide-react';
 
 // --- BANCO DE DADOS INDEXEDDB ASSÍNCRONO ---
@@ -218,7 +218,7 @@ const POSTS_INICIAIS = [
 ];
 
 const Avatar = ({ name, color, src, size = 'w-10 h-10', text = 'text-base' }) => (
-  <div className={`${size} ${text} shrink-0 rounded-full bg-gradient-to-br ${color || AVATAR_GRADIENTS[0]} flex items-center justify-center text-white font-bold shadow-md`}>
+  <div className={`${size} ${text} shrink-0 rounded-full bg-gradient-to-br ${color || AVATAR_GRADIENTS[0]} flex items-center justify-center text-white font-bold`}>
     {src
       ? <img src={src} alt="" referrerPolicy="no-referrer" className="w-full h-full rounded-full object-cover" />
       : ((name || '?').trim().charAt(0).toUpperCase() || '?')}
@@ -236,103 +236,443 @@ const formatPostDate = (iso) => {
 const APRENDIZAGEM_CONTEUDO = [
   {
     id: 'estruturas',
-    title: 'Construção & Estruturas',
+    title: 'Estrutura e Enredo',
     icon: Compass,
-    description: 'Modelos de arquitetura narrativa, controle de ritmo e métodos de expansão de enredo.',
+    description: 'Como organizar a história, controlar o ritmo e planejar sem travar.',
+    resources: [
+      'A Jornada do Escritor, de Christopher Vogler',
+      'Story, de Robert McKee',
+      'Save the Cat! Writes a Novel, de Jessica Brody'
+    ],
     lessons: [
       {
-        subtitle: 'Estrutura de 3 Atos',
+        id: 'tres-atos',
+        title: 'Estrutura de 3 Atos',
         tag: 'Arquitetura',
-        details: 'Divide a narrativa em Exposição (Incidente Incitante), Confronto (Pontos de Virada, Midpoint e Crise) e Resolução (Clímax e Novo Equilíbrio). Garante clareza e ritmo estruturado.'
+        level: 'Iniciante',
+        minutes: 5,
+        summary: "Divide a história em começo, meio e fim com funções claras: apresentar o mundo e o problema, complicar o conflito e resolvê-lo.",
+        points: [
+          "Ato 1 (cerca de 25%): apresenta o protagonista, o mundo comum e o incidente incitante, que quebra a rotina.",
+          "Primeiro ponto de virada: o protagonista se compromete com o conflito e não pode mais voltar atrás.",
+          "Ato 2 (cerca de 50%): obstáculos crescentes. No ponto médio (midpoint), algo muda o que ele sabe ou quer.",
+          "Crise: o momento mais sombrio, em que a escolha parece impossível.",
+          "Ato 3 (cerca de 25%): o clímax testa a escolha em ação, e a história chega a um novo equilíbrio."
+        ],
+        example: "Um bibliotecário encontra um mapa escondido num livro (incidente incitante). Ele rouba o livro para seguir a pista e passa a ser perseguido (primeiro ponto de virada). No meio da busca, descobre que o mapa foi forjado pelo próprio mentor (midpoint). Perde o mapa e o aliado (crise). No clímax, usa o que sabe sobre livros raros para desmascarar o mentor.",
+        mistakes: [
+          "Gastar mais de um terço do livro só na introdução.",
+          "Segundo ato sem escalada: obstáculos de mesma intensidade cansam o leitor.",
+          "Clímax resolvido por coincidência, e não por uma escolha do protagonista."
+        ],
+        exercise: "Escreva uma frase para cada marco da sua história: incidente incitante, primeiro ponto de virada, ponto médio, crise e clímax. Onde ficar vazio, a história precisa de trabalho."
       },
       {
-        subtitle: 'Jornada do Herói (Monomito)',
-        tag: 'Mito / Fantasia',
-        details: 'Os 12 estágios consagrados por Joseph Campbell e Christopher Vogler: do Mundo Comum ao Retorno com o Elixir, passando pelo Chamado, Provações e a Ordalização.'
+        id: 'jornada-heroi',
+        title: 'Jornada do Herói',
+        tag: 'Mito e Fantasia',
+        level: 'Intermediário',
+        minutes: 6,
+        summary: "Modelo de Joseph Campbell, adaptado por Christopher Vogler para o cinema e a literatura, que descreve a transformação do herói em doze estágios.",
+        points: [
+          "Partida: Mundo Comum, Chamado à Aventura, Recusa do Chamado, Encontro com o Mentor e Travessia do Primeiro Limiar.",
+          "Iniciação: Testes, Aliados e Inimigos, Aproximação da Caverna Profunda, Provação e Recompensa.",
+          "Retorno: Caminho de Volta, Ressurreição e Retorno com o Elixir.",
+          "O essencial é a transformação: o herói volta diferente e traz algo de valor ao mundo comum."
+        ],
+        example: "Uma costureira de vila (Mundo Comum) recebe uma carta que a convoca ao palácio (Chamado). Hesita por causa da mãe doente (Recusa), até que uma velha tecelã a convence (Mentor). Ao cruzar o portão da cidade, não há volta (Primeiro Limiar).",
+        mistakes: [
+          "Seguir os doze passos como fórmula rígida: use como mapa, não como grade.",
+          "Herói que não muda. A Ressurreição precisa custar algo.",
+          "Esquecer o Retorno e terminar no clímax, sem mostrar o efeito no mundo comum."
+        ],
+        exercise: "Escolha um filme ou livro que você ama e identifique em quais estágios cada cena se encaixa. Depois faça o mesmo com a sua história e anote os estágios que faltam."
       },
       {
-        subtitle: 'Método Snowflake (Floco de Neve)',
+        id: 'snowflake',
+        title: 'Método Floco de Neve',
         tag: 'Planejamento',
-        details: 'Desenvolvido por Randy Ingermanson. Comece construindo uma única frase explicativa e expanda sistematicamente para um parágrafo, fichas de personagens e, por fim, a escaleta detalhada.'
+        level: 'Intermediário',
+        minutes: 5,
+        summary: "Método de Randy Ingermanson que expande a história aos poucos, de uma única frase até a lista de cenas, para planejar sem travar.",
+        points: [
+          "Passo 1: resuma a história em uma frase curta, sem nomes próprios, centrada no conflito.",
+          "Passo 2: expanda para um parágrafo com cenário, três desastres e o final.",
+          "Passo 3: crie uma ficha curta para cada personagem principal, com objetivo, motivação e conflito.",
+          "Passos seguintes: aumente a sinopse para uma página e depois para quatro, até listar todas as cenas. O método tem dez passos, e os primeiros já dão uma base sólida."
+        ],
+        example: "Frase do passo 1: “Um bibliotecário tímido precisa desmascarar o mentor que forjou um mapa antes que uma coleção histórica seja destruída.”",
+        mistakes: [
+          "Tentar planejar tudo antes de escrever uma linha. Pare quando o plano der segurança para começar.",
+          "Frase longa demais: se não cabe em um fôlego, o conflito ainda não está claro."
+        ],
+        exercise: "Escreva a frase do passo 1 para a sua história em até 15 palavras. Depois expanda para um parágrafo de cinco frases."
       },
       {
-        subtitle: 'Ritmo & Tensão (Pacing)',
+        id: 'ritmo-tensao',
+        title: 'Ritmo e Tensão',
         tag: 'Técnica',
-        details: 'Alternância estratégica entre Cenas de Ação (objetivo, conflito, desastre) e Sequências de Reflexão (reação, dilema, decisão) para manter o leitor engajado sem causar exaustão.'
+        level: 'Intermediário',
+        minutes: 5,
+        summary: "Alternar cenas de ação com momentos de reflexão controla a energia da leitura: tensão constante cansa, calma constante entedia.",
+        points: [
+          "Cena de ação: objetivo, conflito e desastre. O personagem quer algo, é impedido e a situação piora.",
+          "Sequência de reflexão: reação, dilema e decisão. O personagem processa o desastre e escolhe o próximo passo. É o modelo de cena e sequência, de Dwight V. Swain.",
+          "Frases curtas e parágrafos breves aceleram a leitura. Descrições e frases longas desaceleram.",
+          "Termine capítulos com uma pergunta aberta ou uma mudança de situação para puxar o leitor."
+        ],
+        example: "Cena: ele corre para alcançar o trem (objetivo), o portão fecha (conflito) e o trem parte com a prova dentro (desastre). Sequência: sentado na plataforma, sente raiva (reação), pondera entre ligar para a polícia ou seguir de táxi (dilema) e escolhe o táxi (decisão).",
+        mistakes: [
+          "Capítulos inteiros de ação sem respiro: o leitor perde o vínculo emocional.",
+          "Reflexões longas logo após o desastre, quando a história já está lenta."
+        ],
+        exercise: "Escolha um capítulo seu e marque cada cena como ação ou reflexão. Se houver mais de três do mesmo tipo seguidas, tente alternar."
       }
     ]
   },
   {
     id: 'personagens',
-    title: 'Desenvolvimento de Personagens',
+    title: 'Personagens',
     icon: Users,
-    description: 'Psicologia dos personagens, motivações profundas, arquétipos e tipos funcionais.',
+    description: 'Motivações, papéis e arquétipos para criar pessoas que o leitor acredita.',
+    resources: [
+      'Creating Character Arcs, de K. M. Weiland',
+      'O Homem e seus Símbolos, de Carl Jung e colaboradores',
+      'The Hero Within, de Carol S. Pearson'
+    ],
     lessons: [
       {
-        subtitle: 'A Ficha de Personagem Profunda',
+        id: 'ficha-profunda',
+        title: 'A Ficha de Personagem Profunda',
         tag: 'Psicologia',
-        details: 'Equilibre o Desejo Consciente (Want) com a Necessidade Inconsciente (Need). Defina a Ferida Primária (Ghost/Wound), a Mentira (The Lie) em que ele acredita e determine o Arco (Positivo, Negativo ou Estático).'
+        level: 'Intermediário',
+        minutes: 5,
+        summary: "Personagens convincentes têm um desejo claro, uma necessidade que ainda não enxergam e uma ferida que explica por que agem como agem.",
+        points: [
+          "Desejo (want): o que o personagem persegue de forma consciente ao longo da trama.",
+          "Necessidade (need): o que ele realmente precisa para crescer e ainda não percebe.",
+          "Ferida (ghost ou wound): um evento do passado que moldou seus medos.",
+          "Mentira: a crença equivocada que ele usa para se proteger e que o arco vai desafiar.",
+          "Arco: positivo (supera a mentira), negativo (cede a ela) ou estático (mantém-se firme e transforma o mundo ao redor)."
+        ],
+        example: "Marta quer a promoção (desejo), mas precisa aprender a pedir ajuda (necessidade). Foi abandonada na infância depois de confiar demais (ferida) e acredita que “quem depende dos outros sempre perde” (mentira).",
+        mistakes: [
+          "Listar traços físicos sem nenhum conflito interno.",
+          "Uma ferida dramática que não aparece em nenhuma decisão do personagem.",
+          "Resolver o arco com um discurso, em vez de uma escolha em cena."
+        ],
+        exercise: "Escreva em uma frase cada: desejo, necessidade, ferida e mentira do seu protagonista. Depois escreva uma cena curta em que a mentira o leva a uma decisão ruim."
       },
       {
-        subtitle: 'Tipos & Papéis Funcionais',
+        id: 'tipos-papeis',
+        title: 'Tipos e Papéis Funcionais',
         tag: 'Elenco',
-        details: 'Como escalar e equilibrar: Protagonista (motor da ação), Antagonista (força de oposição), Mentor, Coadjuvantes, Alívio Cômico, Camaleão e a Sombra.'
+        level: 'Iniciante',
+        minutes: 4,
+        summary: "Cada personagem importante cumpre uma função na história. Entender os papéis ajuda a equilibrar o elenco e evitar figurantes sem propósito.",
+        points: [
+          "Protagonista: quem move a ação e sofre a mudança central.",
+          "Antagonista: a força de oposição, com motivos próprios e a convicção de estar certo.",
+          "Mentor: oferece conhecimento, ferramenta ou coragem, e muitas vezes sai de cena.",
+          "Aliados e coadjuvantes: ampliam o mundo, dão voz às dúvidas e revelam facetas do protagonista.",
+          "Contraponto (foil): personagem que contrasta com o protagonista e destaca suas qualidades e falhas.",
+          "Um mesmo personagem pode acumular papéis, e os papéis podem mudar ao longo da história."
+        ],
+        example: "Num romance policial, a detetive é a protagonista, o promotor que quer encerrar o caso depressa é o contraponto, e a legista veterana é a mentora que oferece a pista decisiva.",
+        mistakes: [
+          "Antagonista caricato, sem lógica própria.",
+          "Personagens secundários que só existem para explicar a trama."
+        ],
+        exercise: "Liste os personagens da sua história e escreva ao lado a função de cada um. Se dois cumprem a mesma função sem diferença, considere fundi-los."
       },
       {
-        subtitle: 'Arquétipos Junguianos na Literatura',
+        id: 'arquetipos',
+        title: 'Arquétipos Junguianos',
         tag: 'Teoria',
-        details: 'Padrões universais do inconsciente coletivo: O Herói, O Sábio, O Rebelde, O Governante, O Criador, O Cuidador, O Inocente e O Amante.'
+        level: 'Avançado',
+        minutes: 5,
+        summary: "Carl Jung descreveu padrões universais do inconsciente coletivo. Autores usam os arquétipos como ponto de partida e depois os subvertem para criar personagens únicos.",
+        points: [
+          "Adaptações populares, como a de Carol Pearson, listam doze arquétipos, entre eles o Inocente, o Herói, o Cuidador, o Rebelde, o Amante, o Criador, o Sábio, o Mago e o Governante.",
+          "Cada arquétipo tem um desejo central e um medo. O Herói quer provar seu valor e teme a fraqueza. O Sábio busca a verdade e teme a ignorância.",
+          "Sombra: o lado negativo ou reprimido de um arquétipo, útil para criar vilões e conflitos internos.",
+          "Combine arquétipos. Um Cuidador cuja sombra é o controle é mais interessante do que um santo."
+        ],
+        example: "Uma Governante que protege seu reino (desejo de ordem) e, sob pressão, vira tirana (sombra) cria conflito sem precisar de um vilão externo.",
+        mistakes: [
+          "Usar o arquétipo como etiqueta e parar por aí.",
+          "Ignorar a sombra: personagens só virtuosos soam falsos."
+        ],
+        exercise: "Escolha dois arquétipos para o seu protagonista, um principal e um secundário. Escreva uma situação em que a sombra de um atrapalha o outro."
       }
     ]
   },
   {
     id: 'definicoes',
-    title: 'Tipos, POV & Worldbuilding',
+    title: 'Ponto de Vista, Mundo e Prosa',
     icon: Lightbulb,
-    description: 'Perspectivas narrativas, regras de construção de mundo e técnicas de prosa.',
+    description: 'Quem conta a história, onde ela acontece e como o texto convence.',
+    resources: [
+      'Sobre a Escrita, de Stephen King',
+      'Wonderbook, de Jeff VanderMeer',
+      'Ensaios de Brandon Sanderson sobre sistemas de magia'
+    ],
     lessons: [
       {
-        subtitle: 'Foco Narrativo / Ponto de Vista (POV)',
+        id: 'pov',
+        title: 'Ponto de Vista',
         tag: 'Perspectiva',
-        details: '1ª Pessoa (íntima e visceral, com foco em narradores não confiáveis), 3ª Pessoa Limitada (imersão focada em um único personagem por cena) e 3ª Pessoa Onisciente (visão panorâmica e editorial).'
+        level: 'Iniciante',
+        minutes: 5,
+        summary: "O ponto de vista define quem conta a história e quanto o leitor pode saber. É uma das primeiras e mais importantes decisões do autor.",
+        points: [
+          "1ª pessoa: íntima e direta. Limita o leitor ao que o narrador sabe e permite narradores não confiáveis.",
+          "3ª pessoa limitada: acompanha um personagem por cena, com acesso aos pensamentos dele.",
+          "3ª pessoa onisciente: visão panorâmica, com acesso a vários personagens. Exige cuidado para não confundir o leitor.",
+          "Evite o “salto de cabeça” (head-hopping): trocar de ponto de vista no meio da cena sem aviso.",
+          "Um ponto de vista por cena é uma regra prática segura."
+        ],
+        example: "1ª pessoa: “Não vi o carro até ouvir o freio.” 3ª limitada: “Ela não viu o carro até ouvir o freio.” Onisciente: “Ninguém na rua viu o carro, e só o motorista sabia que os freios estavam falhando.”",
+        mistakes: [
+          "Revelar, no pensamento do narrador, algo que ele não poderia saber.",
+          "Trocar de personagem dentro do mesmo parágrafo."
+        ],
+        exercise: "Reescreva uma cena sua em outra pessoa narrativa, por exemplo de 3ª limitada para 1ª. O que você ganhou? O que perdeu?"
       },
       {
-        subtitle: 'Construção de Mundo (Worldbuilding)',
+        id: 'worldbuilding',
+        title: 'Construção de Mundo',
         tag: 'Ambientação',
-        details: 'Aplicações práticas das Leis de Sanderson para Sistemas de Magia (Duros vs. Macios), consistência geopolítica, aspectos socioculturais e atmosfera.'
+        level: 'Intermediário',
+        minutes: 6,
+        summary: "Um mundo bem construído parece ter vida além da página. Regras consistentes e detalhes bem escolhidos importam mais do que volume de informação.",
+        points: [
+          "Leis de Sanderson para magia: a capacidade de resolver conflitos com magia é proporcional ao quanto o leitor a entende; limitações são mais interessantes que poderes; expanda o que já existe antes de acrescentar algo novo.",
+          "Magia dura tem regras explícitas e pode resolver problemas. Magia suave é misteriosa e serve mais à atmosfera.",
+          "Pense nas consequências: se existe teletransporte, como ficam o comércio, a guerra e as fronteiras?",
+          "Mostre o mundo pelos olhos dos personagens, em pequenos detalhes, e evite despejos de informação (info dump).",
+          "Mantenha uma “bíblia do mundo” com regras, nomes, mapas e cronologia."
+        ],
+        example: "Num mundo em que a água é paga por quem a usa, uma cena de jantar já mostra a desigualdade: quem desperdiça uma jarra à mesa exibe riqueza.",
+        mistakes: [
+          "Prólogos longos que explicam o mundo antes de haver história.",
+          "Regras que mudam sempre que a trama precisa."
+        ],
+        exercise: "Escolha uma regra do seu mundo (de magia, política ou tecnologia) e escreva três consequências práticas dela na vida de pessoas comuns."
       },
       {
-        subtitle: "Show, Don't Tell (Mostre, Não Conte)",
+        id: 'show-dont-tell',
+        title: 'Mostre, Não Conte',
         tag: 'Escrita',
-        details: 'Demonstre emoções e intenções através de sensações viscerais, linguagem corporal e ações concretas em vez de resumos expositivos explícitos.'
+        level: 'Iniciante',
+        minutes: 4,
+        summary: "Em vez de declarar emoções e intenções, mostre sinais concretos: ações, falas, sensações e detalhes que levem o leitor a concluir sozinho.",
+        points: [
+          "Troque rótulos por sinais. Em vez de “ele estava nervoso”, mostre as mãos suando ou a caneta que ele não para de girar.",
+          "Use os cinco sentidos, e não só a visão.",
+          "Contar não é proibido: resumos servem para passagens de tempo e informações de pouca importância.",
+          "Mostre os momentos-chave e conte o resto."
+        ],
+        example: "Contado: “Ana estava com raiva.” Mostrado: “Ana dobrou o bilhete duas vezes, depois uma terceira, até ele caber no punho fechado.”",
+        mistakes: [
+          "Mostrar tudo e deixar o texto lento.",
+          "Sinais clichê, como o coração disparado em toda cena de medo."
+        ],
+        exercise: "Pegue três frases suas que nomeiam uma emoção (“estava triste”, “ficou com medo”) e reescreva cada uma usando só ações e detalhes."
+      },
+      {
+        id: 'dialogos',
+        title: 'Diálogos Naturais',
+        tag: 'Escrita',
+        level: 'Intermediário',
+        minutes: 5,
+        summary: "Bons diálogos revelam o personagem e fazem a história avançar. Soam como fala real, mas sem as repetições e pausas inúteis.",
+        points: [
+          "Cada fala deve cumprir ao menos uma função: revelar caráter, trazer informação ou aumentar o conflito.",
+          "Subtexto: as pessoas raramente dizem exatamente o que querem, e o que fica nas entrelinhas gera tensão.",
+          "Dê a cada personagem um jeito próprio de falar, com vocabulário, ritmo e interrupções característicos.",
+          "Prefira “disse” e “perguntou”. Verbos e advérbios exagerados chamam atenção demais.",
+          "Leia em voz alta: se você tropeçar, o leitor também vai tropeçar."
+        ],
+        example: "“Está tudo bem?” “Está.” “Você nem tocou no jantar.” “Já comi na rua.” A resposta curta e a desculpa mostram que há algo errado, sem que ninguém diga.",
+        mistakes: [
+          "Diálogo usado só para informar o leitor (“Como você sabe, meu irmão...”).",
+          "Todos os personagens falando do mesmo jeito."
+        ],
+        exercise: "Escreva uma conversa de dez falas em que um personagem quer algo e não pode pedir diretamente."
+      },
+      {
+        id: 'abertura',
+        title: 'Aberturas e Ganchos',
+        tag: 'Escrita',
+        level: 'Intermediário',
+        minutes: 4,
+        summary: "As primeiras páginas decidem se o leitor continua. Uma boa abertura apresenta uma pessoa, um desejo e uma pergunta.",
+        points: [
+          "Comece perto da mudança: o dia em que algo é diferente, e não a manhã de rotina.",
+          "Dê ao leitor alguém com quem se importar: um desejo, um medo ou uma voz marcante.",
+          "Levante uma pergunta que a próxima página responda só em parte.",
+          "Evite abrir com sonho, despertador, previsão do tempo ou descrição diante do espelho.",
+          "Não prometa o que o livro não vai cumprir: a abertura define o tom e o gênero."
+        ],
+        example: "“No dia em que o relógio da praça parou, só a Clara percebeu.” Há uma pessoa, um fato estranho e uma pergunta.",
+        mistakes: [
+          "Começar com informações de bastidor, como a história do mundo ou do personagem.",
+          "Um gancho espetacular sem relação com o resto do livro."
+        ],
+        exercise: "Escreva três versões da primeira frase da sua história: uma com ação, uma com voz e uma com pergunta. Mostre a um leitor e veja qual o faz querer continuar."
+      }
+    ]
+  },
+  {
+    id: 'oficio',
+    title: 'Revisão e Rotina',
+    icon: Edit3,
+    description: 'Como terminar o rascunho e transformá-lo em um texto melhor.',
+    resources: [
+      'Bird by Bird, de Anne Lamott',
+      'Sobre a Escrita, de Stephen King'
+    ],
+    lessons: [
+      {
+        id: 'revisao-camadas',
+        title: 'Revisão em Camadas',
+        tag: 'Revisão',
+        level: 'Intermediário',
+        minutes: 5,
+        summary: "Revisar tudo de uma vez cansa e deixa passar erros. Trabalhe em camadas, do mais amplo ao mais fino.",
+        points: [
+          "1ª camada, estrutura: a trama faz sentido? Há cenas que não mudam nada e podem sair?",
+          "2ª camada, personagens e ritmo: motivações coerentes, arcos completos e capítulos equilibrados.",
+          "3ª camada, cena a cena: objetivo, conflito e fechamento de cada cena.",
+          "4ª camada, linguagem: repetições, vícios, clichês e frases pesadas.",
+          "Última camada, revisão final: ortografia, pontuação e formatação.",
+          "Deixe o texto descansar alguns dias entre o rascunho e a revisão, para reler com olhos novos."
+        ],
+        example: "Ao ler o terceiro capítulo, você nota que o mentor some sem explicação. Isso é problema de estrutura (camada 1) e deve ser resolvido antes de corrigir vírgulas.",
+        mistakes: [
+          "Corrigir vírgulas em cenas que vão ser cortadas.",
+          "Começar a revisão antes de terminar o rascunho."
+        ],
+        exercise: "Escolha um capítulo e faça só a primeira camada: escreva uma frase dizendo o que muda na história nesse capítulo. Se não conseguir, ele é candidato a corte ou reescrita."
+      },
+      {
+        id: 'habito',
+        title: 'Hábito de Escrita',
+        tag: 'Rotina',
+        level: 'Iniciante',
+        minutes: 4,
+        summary: "Terminar um livro depende mais de constância do que de inspiração. Uma rotina pequena e realista vence maratonas esporádicas.",
+        points: [
+          "Defina uma meta mínima viável, como 200 a 300 palavras, e comemore quando bater.",
+          "Escolha um horário fixo e um gatilho, como depois do café ou antes de dormir.",
+          "Separe escrever de revisar: no rascunho, avance sem corrigir.",
+          "Anote onde parou e o que vem a seguir, para começar rápido no dia seguinte.",
+          "Use a meta diária e a sequência de dias do Estúdio Narrativo para acompanhar o progresso."
+        ],
+        example: "Quem escreve 300 palavras por dia soma mais de 100 mil palavras em um ano, o suficiente para um romance.",
+        mistakes: [
+          "Metas enormes que geram culpa e abandono.",
+          "Esperar o clima perfeito para escrever."
+        ],
+        exercise: "Defina sua meta diária no editor e escreva por 15 minutos hoje, sem apagar nada."
       }
     ]
   },
   {
     id: 'tendencias',
-    title: 'Gêneros & Mercado Editorial',
+    title: 'Gêneros e Mercado Editorial',
     icon: TrendingUp,
-    description: 'Análise de gêneros em alta, nichos de leitores e publicação moderna.',
+    description: 'O que os leitores esperam de cada gênero e como publicar.',
+    resources: [
+      'Write. Publish. Repeat., de Sean Platt e Johnny B. Truant',
+      'Central de ajuda do Amazon KDP (regras e taxas atualizadas)'
+    ],
     lessons: [
       {
-        subtitle: 'Fantasia & Romantasy',
-        tag: 'Tendência Mercado',
-        details: 'O fenômeno do Romantasy (subgêneros de fantasia com forte foco em romance e tensão interpessoal), High Fantasy e Urban Fantasy no mercado contemporâneo.'
+        id: 'fantasia-romantasy',
+        title: 'Fantasia e Romantasy',
+        tag: 'Tendência',
+        level: 'Iniciante',
+        minutes: 4,
+        summary: "A fantasia é um dos gêneros mais populares do mercado. O Romantasy mistura fantasia e romance e ganhou muito espaço nos últimos anos.",
+        points: [
+          "Alta fantasia: mundo inteiramente inventado, com sistemas próprios de magia e política.",
+          "Fantasia urbana: elementos mágicos no mundo contemporâneo.",
+          "Romantasy: o romance é parte central da trama, e a tensão emocional pesa tanto quanto o conflito externo.",
+          "Leitores esperam as promessas do gênero: um mundo imersivo, regras claras de magia e uma relação central que evolui.",
+          "Conhecer os subgêneros ajuda a posicionar o livro na sinopse, na capa e na divulgação."
+        ],
+        example: "Uma curandeira e um cavaleiro de reinos inimigos precisam cooperar para impedir uma guerra, e a relação entre eles evolui junto com o conflito. É um enredo típico de Romantasy.",
+        mistakes: [
+          "Seguir a tendência sem afinidade com o gênero: leitores percebem.",
+          "Prometer romance na sinopse e entregar quase nada."
+        ],
+        exercise: "Escreva a sinopse da sua história em três linhas, citando o gênero e a promessa feita ao leitor."
       },
       {
-        subtitle: 'Thriller & Ficção Policial',
+        id: 'thriller',
+        title: 'Thriller e Ficção Policial',
         tag: 'Gênero',
-        details: 'Técnicas de mistérios de quarto fechado (locked-room), procedurais investigativos, thrillers psicológicos e a construção de Plot Twists memoráveis.'
+        level: 'Intermediário',
+        minutes: 5,
+        summary: "O gênero se sustenta em perguntas e respostas bem administradas: o leitor quer saber quem fez, como, por quê e o que vai acontecer.",
+        points: [
+          "Mistério de quarto fechado (locked-room): um crime aparentemente impossível, com um conjunto fechado de suspeitos.",
+          "Procedural: acompanha o método de investigação com realismo.",
+          "Thriller psicológico: a tensão vem da mente dos personagens e de narradores pouco confiáveis.",
+          "Jogo limpo: dê ao leitor as pistas necessárias para chegar à solução antes ou junto com o detetive.",
+          "Reviravoltas memoráveis nascem de pistas plantadas antes e reinterpretadas depois."
+        ],
+        example: "Se a pista decisiva é um relógio que adianta cinco minutos, mencione o relógio no capítulo 2 como um detalhe de cena. No final, ele muda o álibi.",
+        mistakes: [
+          "Solução que depende de uma informação que o leitor nunca recebeu.",
+          "Revelar o culpado cedo demais ou por uma conversa explicativa."
+        ],
+        exercise: "Liste as cinco pistas do seu mistério e em qual capítulo cada uma aparece. Verifique se o leitor teria uma chance justa de resolver."
       },
       {
-        subtitle: 'Ficção Científica (Sci-Fi)',
+        id: 'ficcao-cientifica',
+        title: 'Ficção Científica',
         tag: 'Gênero',
-        details: 'Especificidades entre Cyberpunk, Space Opera, Solarpunk e Sci-Fi Hard (baseado em rigor científico).'
+        level: 'Intermediário',
+        minutes: 5,
+        summary: "A ficção científica explora perguntas do tipo “e se...?” sobre ciência, tecnologia e sociedade. Os subgêneros variam em tom e rigor.",
+        points: [
+          "Cyberpunk: futuro urbano de alta tecnologia e baixa qualidade de vida, com corporações poderosas.",
+          "Space opera: aventura em escala interestelar, com ênfase em personagens e conflitos épicos.",
+          "Solarpunk: futuro otimista, com tecnologia sustentável e comunidades cooperativas.",
+          "Sci-fi hard: ciência rigorosa, em que a plausibilidade científica faz parte do prazer da leitura.",
+          "Escolha uma pergunta central (“e se...?”) e explore as consequências humanas dela."
+        ],
+        example: "“E se a memória pudesse ser vendida?” leva a questões de desigualdade, identidade e crime, e gera personagens e conflitos de forma natural.",
+        mistakes: [
+          "Explicar a tecnologia com mais detalhes do que a história precisa.",
+          "Criar um futuro em que a sociedade é igual à de hoje."
+        ],
+        exercise: "Escreva a pergunta “e se...?” da sua história e três mudanças que ela provoca na vida cotidiana."
       },
       {
-        subtitle: 'Mercado Digital & Autopublicação',
+        id: 'autopublicacao',
+        title: 'Mercado Digital e Autopublicação',
         tag: 'Carreira',
-        details: 'Estratégias para Amazon Kindle Direct Publishing (KDP), otimização de metadados, capas atrativas e construção de comunidade de leitores.'
+        level: 'Avançado',
+        minutes: 6,
+        summary: "Publicar por conta própria dá controle, mas exige cuidar de revisão, capa, divulgação e leitores.",
+        points: [
+          "Plataformas como o Amazon KDP permitem publicar e-books e livros impressos sob demanda.",
+          "Os investimentos que mais pesam são a revisão profissional, uma capa adequada ao gênero e uma sinopse atraente.",
+          "Metadados (título, subtítulo, categorias e palavras-chave) ajudam os leitores a encontrar o livro.",
+          "Construa uma comunidade de leitores antes e depois do lançamento: newsletter, redes sociais e clubes de leitura.",
+          "Confira as regras, taxas e prazos atuais da plataforma antes de publicar, porque mudam com frequência."
+        ],
+        example: "Imagine duas capas: uma de fantasia, com ilustração e tipografia ornamentada, e outra minimalista. O leitor do gênero reconhece a primeira como fantasia em segundos, e isso influencia o clique.",
+        mistakes: [
+          "Publicar sem revisão externa.",
+          "Usar uma capa que não comunica o gênero.",
+          "Divulgar só no dia do lançamento."
+        ],
+        exercise: "Escreva a sinopse do seu livro em 100 palavras e liste três livros semelhantes que o seu leitor ideal já leu."
       }
     ]
   }
@@ -411,6 +751,7 @@ const ComfortReader = ({ title, pages, onClose, defaultTheme, docKey }) => {
   const [idx, setIdx] = useState(0);
   const [query, setQuery] = useState('');
   const [speaking, setSpeaking] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [notes, setNotes] = useState([]);
   const [notesOpen, setNotesOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
@@ -582,6 +923,9 @@ const ComfortReader = ({ title, pages, onClose, defaultTheme, docKey }) => {
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 border-b text-xs" style={{ borderColor: t.border }}>
+        <button type="button" onClick={() => setShowSettings(v => !v)} className={btn(showSettings)} style={{ borderColor: t.border }} aria-pressed={showSettings} aria-label="Ajustes de texto">Aa</button>
+        {showSettings && (
+          <>
         <div className="flex items-center gap-1">
           {Object.entries(READER_THEMES).map(([key, v]) => (
             <button key={key} type="button" onClick={() => update({ theme: key })} className={btn(prefs.theme === key)} style={{ borderColor: v.border }} aria-pressed={prefs.theme === key}>{v.label}</button>
@@ -595,6 +939,8 @@ const ComfortReader = ({ title, pages, onClose, defaultTheme, docKey }) => {
         <div className="flex items-center gap-1">{opts([['Serifa', true], ['Sem serifa', false]], 'serif')}</div>
         <div className="flex items-center gap-1">{opts([['Estreita', 50], ['Média', 65], ['Larga', 80]], 'width')}</div>
         <div className="flex items-center gap-1">{opts([['Compacto', 1.5], ['Normal', 1.8], ['Amplo', 2.1]], 'spacing')}</div>
+        </>
+        )}
         <div className="flex items-center gap-1">
           <input
             type="text"
@@ -816,7 +1162,7 @@ const MusicPlayer = ({ isDark, showNotification }) => {
   const round = `p-2 rounded-full disabled:opacity-40 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`;
 
   return (
-    <aside className={`rounded-2xl border p-5 space-y-4 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+    <aside className={`rounded-xl border p-5 space-y-4 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
       <h2 className="font-bold flex items-center gap-2">
         <Music className="w-5 h-5 text-indigo-500" /> Música para ler
       </h2>
@@ -979,7 +1325,7 @@ const ReadingTab = ({ isDark, pdfs, busy, publishedIds, communityReads, onUpload
           type="button"
           disabled={busy}
           onClick={() => inputRef.current?.click()}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium shadow-lg shadow-indigo-600/30 transition-all"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium transition-all"
         >
           <FileUp className="w-4 h-4" /> {busy ? 'Processando...' : 'Adicionar PDF'}
         </button>
@@ -1014,25 +1360,23 @@ const ReadingTab = ({ isDark, pdfs, busy, publishedIds, communityReads, onUpload
                       <p className="text-xs text-amber-500 mt-2">Sem texto selecionável (provável PDF escaneado): o modo confortável não está disponível, mas dá para abrir o original.</p>
                     )}
                     <TagChips item={pdf} isDark={isDark} />
-                    <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <div className="flex items-center gap-2 mt-3">
                       <button type="button" disabled={pdf.scanned} onClick={() => onRead({ title: pdf.title, content: pdf.text, key: `pdf:${pdf.id}` })} className={`${ghost} text-indigo-400 disabled:opacity-40`}>
                         <BookOpen className="w-3.5 h-3.5" /> Ler
                       </button>
-                      <button type="button" onClick={() => onOpenOriginal(pdf)} className={ghost}>Abrir original</button>
-                      <button type="button" onClick={() => onTogglePublish(pdf, 'public')} className={ghost}>
-                        <Share2 className="w-3.5 h-3.5" /> {published ? 'Remover compartilhamento' : 'Publicar na comunidade'}
-                      </button>
-                      {!published && cloudActive && (
-                        <button type="button" onClick={() => onTogglePublish(pdf, 'link')} className={ghost}>Compartilhar por link</button>
-                      )}
-                      {published && pdf.shareToken && (
-                        <button type="button" onClick={() => onCopyLink(pdf.shareToken)} className={ghost}>Copiar link</button>
-                      )}
-                      <button type="button" onClick={() => onOrganize('pdf', pdf)} className={ghost}><Tag className="w-3.5 h-3.5" /> Etiquetas</button>
-                      <button type="button" onClick={() => onSendFile(pdf)} className={ghost}>Enviar arquivo</button>
-                      <button type="button" onClick={() => onDelete(pdf)} className="p-2 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors ml-auto" title="Remover PDF">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <ActionMenu
+                        isDark={isDark}
+                        up
+                        items={[
+                          { label: 'Abrir original', onClick: () => onOpenOriginal(pdf) },
+                          { label: published ? 'Remover compartilhamento' : 'Publicar na comunidade', onClick: () => onTogglePublish(pdf, 'public') },
+                          ...(!published && cloudActive ? [{ label: 'Compartilhar por link', onClick: () => onTogglePublish(pdf, 'link') }] : []),
+                          ...(published && pdf.shareToken ? [{ label: 'Copiar link', onClick: () => onCopyLink(pdf.shareToken) }] : []),
+                          { label: 'Etiquetas e coleção', onClick: () => onOrganize('pdf', pdf) },
+                          { label: 'Enviar arquivo', onClick: () => onSendFile(pdf) },
+                          { label: 'Remover PDF', danger: true, onClick: () => onDelete(pdf) }
+                        ]}
+                      />
                     </div>
                   </div>
                 );
@@ -1160,7 +1504,7 @@ const FocusTimer = ({ isDark, showNotification }) => {
   const small = `px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'}`;
 
   return (
-    <section className={`rounded-2xl border p-5 space-y-4 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+    <section className={`rounded-xl border p-5 space-y-4 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
       <h2 className="font-bold flex items-center gap-2">
         <Timer className="w-5 h-5 text-indigo-500" /> Tempo de foco
       </h2>
@@ -1292,7 +1636,7 @@ const WritingStats = ({ isDark, log, goal, todayWords }) => {
   }
 
   return (
-    <div className={`rounded-2xl border p-6 space-y-5 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+    <div className={`rounded-xl border p-6 space-y-5 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
       <h3 className="font-bold text-lg">Estatísticas de escrita</h3>
 
       <div className="grid grid-cols-3 gap-3 text-center">
@@ -1521,6 +1865,331 @@ const AccountCard = ({ isDark, session, onSignIn, onSignOut, blockedCount, onUnb
   );
 };
 
+// --- INTERFACE: menu de ações e aba "Aprender" ---
+const ActionMenu = ({ isDark, items, label, up }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('touchstart', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={label || 'Mais opções'}
+        className={`flex items-center gap-1.5 rounded-lg transition-colors ${label ? 'px-3 py-2 text-sm font-medium' : 'p-2'} ${
+          isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-100 text-slate-600'
+        }`}
+      >
+        <MoreHorizontal className="w-4 h-4" />
+        {label}
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className={`absolute right-0 ${up ? 'bottom-full mb-1' : 'top-full mt-1'} w-56 rounded-xl border py-1 z-30 shadow-xl ${
+            isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+          }`}
+        >
+          {items.map((it, i) => (
+            <button
+              key={i}
+              type="button"
+              role="menuitem"
+              onClick={() => { setOpen(false); it.onClick(); }}
+              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                it.danger
+                  ? 'text-rose-500 hover:bg-rose-500/10'
+                  : isDark ? 'text-slate-200 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              {it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const LearningTab = ({ isDark, done, onToggleDone, onStartExercise }) => {
+  const [query, setQuery] = useState('');
+  const [moduleId, setModuleId] = useState('all');
+  const [openId, setOpenId] = useState(null);
+
+  const all = useMemo(
+    () => APRENDIZAGEM_CONTEUDO.flatMap(m => m.lessons.map(l => ({ ...l, moduleId: m.id, moduleTitle: m.title }))),
+    []
+  );
+  const doneCount = all.filter(l => done[l.id]).length;
+  const pct = all.length ? Math.round((doneCount / all.length) * 100) : 0;
+  const next = all.find(l => !done[l.id]);
+  const q = norm(query.trim());
+  const searching = q.length >= 2;
+  const matches = searching
+    ? all.filter(l => norm([l.title, l.tag, l.summary, l.moduleTitle, ...l.points].join(' ')).includes(q))
+    : [];
+  const lesson = openId ? all.find(l => l.id === openId) : null;
+
+  const muted = isDark ? 'text-slate-400' : 'text-slate-600';
+  const line = isDark ? 'border-slate-800' : 'border-slate-200';
+  const open = (id) => { setOpenId(id); window.scrollTo({ top: 0 }); };
+
+  const renderRow = (l, showModule) => (
+    <button
+      key={l.id}
+      type="button"
+      onClick={() => open(l.id)}
+      className={`w-full text-left flex items-start gap-3 px-4 py-3.5 transition-colors ${isDark ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50'}`}
+    >
+      <span
+        className={`mt-0.5 w-5 h-5 shrink-0 rounded-full border flex items-center justify-center text-[11px] ${
+          done[l.id] ? 'bg-emerald-500 border-emerald-500 text-white' : isDark ? 'border-slate-600' : 'border-slate-300'
+        }`}
+      >
+        {done[l.id] ? '✓' : ''}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-semibold text-sm">{l.title}</span>
+        <span className={`block text-xs mt-0.5 line-clamp-2 ${muted}`}>{l.summary}</span>
+        {showModule && <span className="block text-[11px] mt-1 text-indigo-400">{l.moduleTitle}</span>}
+      </span>
+      <span className={`text-xs shrink-0 ${muted}`}>{l.minutes} min</span>
+    </button>
+  );
+
+  const resourcesBlock = (mod) => (mod.resources && mod.resources.length > 0 ? (
+    <section className="space-y-2">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Para ir além</h2>
+      <ul className={`text-sm space-y-1 ${muted}`}>
+        {mod.resources.map((r, i) => <li key={i}>{r}</li>)}
+      </ul>
+      <p className="text-xs text-slate-500">Os títulos em português podem variar conforme a edição.</p>
+    </section>
+  ) : null);
+
+  // ---------- Detalhe da lição ----------
+  if (lesson) {
+    const mod = APRENDIZAGEM_CONTEUDO.find(m => m.id === lesson.moduleId);
+    const siblings = mod.lessons;
+    const idx = siblings.findIndex(l => l.id === lesson.id);
+    const prev = siblings[idx - 1];
+    const nxt = siblings[idx + 1];
+    const isDone = !!done[lesson.id];
+    const h2 = 'text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3';
+
+    return (
+      <article className="max-w-2xl mx-auto space-y-8">
+        <button
+          type="button"
+          onClick={() => setOpenId(null)}
+          className={`flex items-center gap-1 text-sm ${muted} hover:text-indigo-400 transition-colors`}
+        >
+          <ChevronLeft className="w-4 h-4" /> Todas as lições
+        </button>
+
+        <header className="space-y-3">
+          <p className="text-xs uppercase tracking-wider text-indigo-400">{mod.title}</p>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{lesson.title}</h1>
+          <p className={`text-xs ${muted}`}>{lesson.tag} • {lesson.level} • {lesson.minutes} min de leitura</p>
+        </header>
+
+        <p className="text-base leading-relaxed">{lesson.summary}</p>
+
+        <section>
+          <h2 className={h2}>Pontos-chave</h2>
+          <ul className="space-y-2.5">
+            {lesson.points.map((pt, i) => (
+              <li key={i} className="flex gap-3 text-sm leading-relaxed">
+                <span className="text-indigo-400 mt-0.5">•</span>
+                <span>{pt}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section>
+          <h2 className={h2}>Exemplo</h2>
+          <blockquote className={`border-l-2 border-indigo-500 pl-4 text-sm leading-relaxed ${muted}`}>{lesson.example}</blockquote>
+        </section>
+
+        {lesson.mistakes && lesson.mistakes.length > 0 && (
+          <section>
+            <h2 className={h2}>Erros comuns</h2>
+            <ul className="space-y-2">
+              {lesson.mistakes.map((m, i) => (
+                <li key={i} className={`flex gap-3 text-sm leading-relaxed ${muted}`}>
+                  <span className="text-rose-400 mt-0.5">×</span>
+                  <span>{m}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <section className={`rounded-xl border p-5 space-y-4 ${line} ${isDark ? 'bg-slate-900/40' : 'bg-white'}`}>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-indigo-400">Exercício</h2>
+          <p className="text-sm leading-relaxed">{lesson.exercise}</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onStartExercise(lesson)}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+            >
+              Praticar no editor
+            </button>
+            <button
+              type="button"
+              onClick={() => onToggleDone(lesson.id)}
+              className={`px-4 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                isDone
+                  ? 'border-emerald-500 text-emerald-500'
+                  : isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'
+              }`}
+            >
+              {isDone ? 'Concluída ✓' : 'Marcar como concluída'}
+            </button>
+          </div>
+        </section>
+
+        <nav className={`flex items-center justify-between gap-3 pt-4 border-t ${line}`}>
+          {prev ? (
+            <button type="button" onClick={() => open(prev.id)} className={`flex items-center gap-1 text-sm text-left ${muted} hover:text-indigo-400 transition-colors`}>
+              <ChevronLeft className="w-4 h-4 shrink-0" /> {prev.title}
+            </button>
+          ) : <span />}
+          {nxt ? (
+            <button type="button" onClick={() => open(nxt.id)} className={`flex items-center gap-1 text-sm text-right ${muted} hover:text-indigo-400 transition-colors`}>
+              {nxt.title} <ChevronRight className="w-4 h-4 shrink-0" />
+            </button>
+          ) : <span />}
+        </nav>
+
+        {resourcesBlock(mod)}
+      </article>
+    );
+  }
+
+  // ---------- Lista ----------
+  const visibleModules = moduleId === 'all' ? APRENDIZAGEM_CONTEUDO : APRENDIZAGEM_CONTEUDO.filter(m => m.id === moduleId);
+  const chip = (active) => `px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+    active
+      ? 'bg-indigo-600 text-white'
+      : isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
+  }`;
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-8">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Aprender</h1>
+            <p className={`text-sm mt-1 ${muted}`}>{doneCount} de {all.length} lições concluídas</p>
+          </div>
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar uma técnica..."
+              aria-label="Buscar lições"
+              className={`w-full pl-9 pr-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
+              }`}
+            />
+          </div>
+        </div>
+
+        <div className={`h-1 rounded-full overflow-hidden ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
+          <div className="h-full bg-indigo-500 transition-all" style={{ width: `${pct}%` }} />
+        </div>
+
+        {!searching && next && (
+          <button
+            type="button"
+            onClick={() => open(next.id)}
+            className={`w-full text-left flex items-center justify-between gap-3 px-4 py-3 rounded-xl border transition-colors ${line} ${
+              isDark ? 'hover:bg-slate-900' : 'hover:bg-white'
+            }`}
+          >
+            <span className="min-w-0">
+              <span className="block text-xs text-indigo-400">{doneCount === 0 ? 'Comece por aqui' : 'Continuar'}</span>
+              <span className="block text-sm font-semibold truncate">{next.title}</span>
+            </span>
+            <ChevronRight className="w-4 h-4 shrink-0 text-slate-500" />
+          </button>
+        )}
+        {!next && <p className="text-sm text-emerald-500">Você concluiu todas as lições. Continue praticando no editor!</p>}
+      </div>
+
+      {searching ? (
+        <section className="space-y-3">
+          <p className={`text-xs ${muted}`}>{matches.length} {matches.length === 1 ? 'resultado' : 'resultados'}</p>
+          {matches.length === 0 ? (
+            <p className="text-sm text-slate-500">Nenhuma lição encontrada. Tente outra palavra.</p>
+          ) : (
+            <div className={`rounded-xl border divide-y ${line} ${isDark ? 'divide-slate-800' : 'divide-slate-200'}`}>
+              {matches.map(l => renderRow(l, true))}
+            </div>
+          )}
+        </section>
+      ) : (
+        <>
+          <div className="flex items-center gap-1 overflow-x-auto pb-1">
+            <button type="button" onClick={() => setModuleId('all')} className={chip(moduleId === 'all')}>Todas</button>
+            {APRENDIZAGEM_CONTEUDO.map(m => {
+              const total = m.lessons.length;
+              const finished = m.lessons.filter(l => done[l.id]).length;
+              return (
+                <button key={m.id} type="button" onClick={() => setModuleId(m.id)} className={chip(moduleId === m.id)}>
+                  {m.title} <span className="opacity-60">{finished}/{total}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {visibleModules.map(m => {
+            const IconComponent = m.icon;
+            const finished = m.lessons.filter(l => done[l.id]).length;
+            return (
+              <section key={m.id} className="space-y-3">
+                <div>
+                  <h2 className="flex items-center gap-2 text-base font-semibold">
+                    <IconComponent className="w-4 h-4 text-indigo-400" />
+                    {m.title}
+                    <span className={`text-xs font-normal ${muted}`}>{finished}/{m.lessons.length}</span>
+                  </h2>
+                  <p className={`text-xs mt-1 ${muted}`}>{m.description}</p>
+                </div>
+                <div className={`rounded-xl border divide-y ${line} ${isDark ? 'divide-slate-800' : 'divide-slate-200'}`}>
+                  {m.lessons.map(l => renderRow({ ...l, moduleTitle: m.title }, false))}
+                </div>
+                {moduleId !== 'all' && resourcesBlock(m)}
+              </section>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+};
+
 // --- COMPONENTE PRINCIPAL ---
 
 export default function EstudioApp() {
@@ -1552,6 +2221,7 @@ export default function EstudioApp() {
   const [tagsDraft, setTagsDraft] = useState('');
   const [collectionDraft, setCollectionDraft] = useState('');
   const [writingLog, setWritingLog] = useState({});
+  const [learningDone, setLearningDone] = useState({});
 
   // Conta e nuvem
   const [session, setSession] = useState(null);
@@ -1635,6 +2305,8 @@ export default function EstudioApp() {
         if (savedGoal && isMounted) setDailyGoal(savedGoal);
         const savedBaseline = await dbGet('settings', 'dayBaseline');
         if (savedBaseline && isMounted) setDayBaseline(savedBaseline);
+        const savedLearning = await dbGet('settings', 'learningProgress');
+        if (savedLearning && isMounted) setLearningDone(savedLearning);
         const savedLog = await dbGet('settings', 'writingLog');
         if (savedLog && isMounted) setWritingLog(savedLog);
         const savedBackupAt = await dbGet('settings', 'lastBackupAt');
@@ -2491,18 +3163,6 @@ export default function EstudioApp() {
     setFlipbookBook(null);
   };
 
-  const filteredLessons = useMemo(() => {
-    const activeMod = APRENDIZAGEM_CONTEUDO.find(m => m.id === selectedModule) || APRENDIZAGEM_CONTEUDO[0];
-    if (!searchTerm.trim()) return activeMod.lessons;
-
-    const term = searchTerm.toLowerCase();
-    return activeMod.lessons.filter(l =>
-      l.subtitle.toLowerCase().includes(term) ||
-      l.details.toLowerCase().includes(term) ||
-      l.tag.toLowerCase().includes(term)
-    );
-  }, [selectedModule, searchTerm]);
-
   const isDark = theme === 'dark';
 
   const toolBtn = `flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${
@@ -2548,6 +3208,32 @@ export default function EstudioApp() {
     showNotification('Etiquetas e coleção salvas!');
   };
 
+  // --- Aprendizagem ---
+  const handleToggleLesson = (id) => {
+    const next = { ...learningDone };
+    if (next[id]) delete next[id];
+    else next[id] = true;
+    setLearningDone(next);
+    dbSet('settings', next, 'learningProgress');
+  };
+
+  const handleStartExercise = (lesson) => {
+    const newBook = {
+      id: `b_${Date.now()}`,
+      updatedAt: Date.now(),
+      title: `Exercício: ${lesson.title}`,
+      author: profile.name || 'Autor',
+      genre: 'Exercício',
+      coverColor: 'from-emerald-600 to-teal-800',
+      synopsis: `Prática da lição "${lesson.title}".`,
+      content: `${lesson.title}\n\nExercício:\n${lesson.exercise}\n\n---\n\n`
+    };
+    setBooks(prev => [newBook, ...prev]);
+    setSelectedBookId(newBook.id);
+    setActiveTab('editor');
+    showNotification('Exercício criado no editor!');
+  };
+
   // --- Meta diária de palavras ---
   const totalWords = useMemo(() => books.reduce((sum, b) => sum + calculateWords(b.content), 0), [books]);
   const todayWords = Math.max(0, totalWords - (dayBaseline ? dayBaseline.words : totalWords));
@@ -2576,7 +3262,6 @@ export default function EstudioApp() {
   useEffect(() => {
     if (!supabase || !sessionUid || !isLoaded) return;
     syncCloud(session.user);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionUid, isLoaded]);
 
   // Mantém a comunidade atualizada enquanto a aba está aberta
@@ -2619,7 +3304,6 @@ export default function EstudioApp() {
       const content = sp ? row.shared_text : (sb ? sb.excerpt : row.text);
       openFlipbook({ title: `${name} — por ${row.author_name}`, content: content || row.text || '', key: `post:${row.id}` });
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded]);
 
   // Registra as palavras escritas hoje (para as estatísticas)
@@ -2722,7 +3406,7 @@ export default function EstudioApp() {
         pdfRecords.push({ ...rest, fileData: blob ? await blobToDataUrl(blob) : null });
       }
       const settings = {};
-      for (const k of ['theme', 'readerPrefs', 'musicLinks', 'dailyGoal', 'readingProgress', 'annotations', 'writingLog']) {
+      for (const k of ['theme', 'readerPrefs', 'musicLinks', 'dailyGoal', 'readingProgress', 'annotations', 'writingLog', 'learningProgress']) {
         const v = await dbGet('settings', k);
         if (v !== undefined && v !== null) settings[k] = v;
       }
@@ -2774,7 +3458,7 @@ export default function EstudioApp() {
           if (post && post.id && !posts.some(x => x.id === post.id)) await dbSet('posts', post);
         }
         for (const [k, v] of Object.entries(data.settings || {})) {
-          if (['readingProgress', 'annotations', 'writingLog', 'musicLinks'].includes(k)) {
+          if (['readingProgress', 'annotations', 'writingLog', 'musicLinks', 'learningProgress'].includes(k)) {
             const cur = (await dbGet('settings', k)) || {};
             await dbSet('settings', { ...v, ...cur }, k);
           } else if (['readerPrefs', 'dailyGoal'].includes(k) && (await dbGet('settings', k)) == null) {
@@ -2799,102 +3483,75 @@ export default function EstudioApp() {
 
   const navItems = [
     { id: 'library', label: 'Biblioteca', Icon: BookOpen },
-    { id: 'editor', label: 'Editor Pro', Icon: Edit3 },
+    { id: 'editor', label: 'Editor', Icon: Edit3 },
     { id: 'reading', label: 'Leitura', Icon: FileText },
     { id: 'community', label: 'Comunidade', Icon: Globe },
-    { id: 'learning', label: 'Aprendizado', Icon: GraduationCap },
+    { id: 'learning', label: 'Aprender', Icon: GraduationCap },
     { id: 'profile', label: 'Perfil', Icon: User }
   ];
 
   return (
     <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
 
-      {/* HEADER */}
-      <header className={`sticky top-0 z-30 border-b backdrop-blur-md ${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white/90 border-slate-200'}`}>
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className={`p-2 rounded-lg md:hidden ${isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}
-              aria-label="Alternar menu"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-500/30">
-                <Feather className="w-5 h-5" />
-              </div>
-              <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
-                Estúdio Narrativo
-              </span>
-            </div>
+      {/* CABEÇALHO */}
+      <header className={`sticky top-0 z-30 border-b ${isDark ? 'bg-slate-950/95 border-slate-800' : 'bg-white/95 border-slate-200'}`}>
+        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Feather className="w-5 h-5 text-indigo-500" />
+            <span className="font-semibold tracking-tight">Estúdio Narrativo</span>
           </div>
 
-          {/* NAVEGAÇÃO DESKTOP */}
-          <nav className={`hidden md:flex items-center gap-1 p-1 rounded-xl border ${isDark ? 'bg-slate-800/20 border-slate-700/30' : 'bg-slate-100 border-slate-200'}`}>
-            {navItems.map(({ id, label, Icon }) => (
+          <nav className="hidden md:flex items-center gap-1" aria-label="Navegação principal">
+            {navItems.map(({ id, label }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                aria-current={activeTab === id ? 'page' : undefined}
+                className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === id
-                    ? 'bg-indigo-600 text-white shadow-md'
-                    : isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                    ? 'border-indigo-500 text-indigo-500'
+                    : `border-transparent ${isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800'}`
                 }`}
               >
-                <Icon className="w-4 h-4" />
                 {label}
               </button>
             ))}
           </nav>
 
-          {/* TEMA */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={toggleTheme}
-              className={`p-2 rounded-xl border transition-all ${
-                isDark
-                  ? 'bg-slate-900 border-slate-800 text-amber-400 hover:bg-slate-800'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
-              title="Alternar Tema"
-            >
-              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-          </div>
+          <button
+            onClick={toggleTheme}
+            className={`p-2 rounded-lg transition-colors ${isDark ? 'text-amber-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}
+            title="Alternar tema"
+            aria-label="Alternar tema"
+          >
+            {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
         </div>
       </header>
 
-      {/* MENU MOBILE */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-40 md:hidden flex">
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
-          <div className={`relative w-64 max-w-xs flex-1 flex flex-col py-6 px-4 shadow-xl ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-800'}`}>
-            <div className="flex items-center justify-between mb-8">
-              <span className="font-bold text-lg text-indigo-500">Navegação</span>
-              <button onClick={() => setSidebarOpen(false)} className="p-1 rounded-lg hover:bg-slate-800/20" aria-label="Fechar menu">
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="flex flex-col gap-2">
-              {navItems.map(({ id, label, Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium ${activeTab === id ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800/10'}`}
-                >
-                  <Icon className="w-5 h-5" /> {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* NAVEGAÇÃO NO CELULAR */}
+      <nav
+        className={`md:hidden fixed bottom-0 inset-x-0 z-30 border-t flex ${isDark ? 'bg-slate-950/95 border-slate-800' : 'bg-white/95 border-slate-200'}`}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        aria-label="Navegação principal"
+      >
+        {navItems.map(({ id, label, Icon }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            aria-current={activeTab === id ? 'page' : undefined}
+            className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors ${
+              activeTab === id ? 'text-indigo-500' : 'text-slate-500'
+            }`}
+          >
+            <Icon className="w-5 h-5" />
+            {label}
+          </button>
+        ))}
+      </nav>
 
       {/* CONTEÚDO PRINCIPAL */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 pb-24 md:p-6">
 
         {/* --- LEITURA (PDFs + MÚSICA) --- */}
         <div className={activeTab === 'reading' ? '' : 'hidden'}>
@@ -2923,52 +3580,38 @@ export default function EstudioApp() {
 
             <div className={`flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Sua Estante Digital</h1>
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Biblioteca</h1>
                 <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Gerencie seus manuscritos e documentos de estudo localmente.
+                  {books.length} {books.length === 1 ? 'manuscrito' : 'manuscritos'} • {totalWords.toLocaleString('pt-BR')} palavras
                 </p>
                 <p className={`text-xs mt-1 ${backupOld ? 'text-amber-500' : 'text-slate-500'}`}>
                   {lastBackupAt
                     ? `Último backup: ${new Date(lastBackupAt).toLocaleDateString('pt-BR')}`
-                    : 'Você ainda não fez backup. Use "Backup completo" para guardar uma cópia.'}
+                    : 'Sem backup ainda: use "Mais" e depois "Backup completo".'}
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <input
-                  type="file"
-                  ref={jsonFileInputRef}
-                  onChange={handleImportJSON}
-                  accept=".json"
-                  className="hidden"
-                />
-                <button
-                  onClick={() => jsonFileInputRef.current?.click()}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
-                    isDark ? 'border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                  }`}
-                >
-                  <Upload className="w-4 h-4 text-indigo-400" />
-                  Importar Projeto JSON
-                </button>
-
+                <input type="file" ref={jsonFileInputRef} onChange={handleImportJSON} accept=".json" className="hidden" />
                 <input type="file" ref={backupInputRef} onChange={handleRestoreBackup} accept=".json" className="hidden" />
-                <button onClick={handleExportAll} className={libBtn}>
-                  <Download className="w-4 h-4 text-indigo-400" />
-                  Backup completo
-                </button>
-                <button onClick={() => backupInputRef.current?.click()} className={libBtn}>
-                  <Upload className="w-4 h-4 text-indigo-400" />
-                  Restaurar backup
-                </button>
 
                 <button
                   onClick={handleCreateNewBook}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium shadow-lg shadow-indigo-600/30 transition-all"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
                 >
                   <Plus className="w-4 h-4" />
-                  Novo Manuscrito
+                  Novo manuscrito
                 </button>
+
+                <ActionMenu
+                  isDark={isDark}
+                  label="Mais"
+                  items={[
+                    { label: 'Importar projeto (JSON)', onClick: () => jsonFileInputRef.current?.click() },
+                    { label: 'Backup completo', onClick: handleExportAll },
+                    { label: 'Restaurar backup', onClick: () => backupInputRef.current?.click() }
+                  ]}
+                />
               </div>
             </div>
 
@@ -2990,12 +3633,12 @@ export default function EstudioApp() {
                 {visibleBooks.map((book) => (
                   <div
                     key={book.id}
-                    className={`group relative rounded-2xl border p-5 flex flex-col justify-between transition-all duration-200 hover:shadow-xl ${
+                    className={`group relative rounded-xl border p-5 flex flex-col justify-between transition-all duration-200 ${
                       isDark ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     <div>
-                      <div className={`h-32 rounded-xl bg-gradient-to-br ${book.coverColor || 'from-indigo-600 to-purple-800'} p-4 flex flex-col justify-between text-white shadow-inner mb-4`}>
+                      <div className={`h-24 rounded-xl bg-gradient-to-br ${book.coverColor || 'from-indigo-600 to-purple-800'} p-3 flex flex-col justify-between text-white mb-3`}>
                         <span className="text-xs font-semibold uppercase tracking-wider bg-black/30 px-2 py-1 rounded-md w-fit backdrop-blur-sm">
                           {book.genre || 'Geral'}
                         </span>
@@ -3020,23 +3663,9 @@ export default function EstudioApp() {
                         <button
                           onClick={() => openFlipbook({ ...book, key: `book:${book.id}` })}
                           className="p-2 rounded-lg hover:bg-indigo-600/10 text-indigo-400 transition-colors"
-                          title="Ler no Flipbook"
+                          title="Ler"
                         >
                           <BookOpen className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => openOrganize('book', book)}
-                          className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}
-                          title="Etiquetas e coleção"
-                        >
-                          <Tag className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleExportJSON(book)}
-                          className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}
-                          title="Exportar JSON"
-                        >
-                          <Download className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => {
@@ -3044,17 +3673,19 @@ export default function EstudioApp() {
                             setActiveTab('editor');
                           }}
                           className="p-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
-                          title="Editar Manuscrito"
+                          title="Editar"
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => confirmDeleteBook(book.id)}
-                          className="p-2 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors"
-                          title="Excluir"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <ActionMenu
+                          isDark={isDark}
+                          up
+                          items={[
+                            { label: 'Etiquetas e coleção', onClick: () => openOrganize('book', book) },
+                            { label: 'Exportar JSON', onClick: () => handleExportJSON(book) },
+                            { label: 'Excluir', danger: true, onClick: () => confirmDeleteBook(book.id) }
+                          ]}
+                        />
                       </div>
                     </div>
                   </div>
@@ -3133,10 +3764,10 @@ export default function EstudioApp() {
 
         {/* --- EDITOR PRO --- */}
         {activeTab === 'editor' && (
-          <div className={focusMode ? `fixed inset-0 z-40 p-4 md:p-10 flex flex-col ${isDark ? 'bg-slate-950' : 'bg-slate-50'}` : 'h-[calc(100vh-8rem)] flex flex-col md:flex-row gap-4'}>
+          <div className={focusMode ? `fixed inset-0 z-40 p-4 md:p-10 flex flex-col ${isDark ? 'bg-slate-950' : 'bg-slate-50'}` : 'h-[calc(100vh-11rem)] md:h-[calc(100vh-8rem)] flex flex-col md:flex-row gap-4'}>
 
             {/* LISTA LATERAL */}
-            <div className={`${focusMode ? 'hidden ' : ''}w-full md:w-64 flex flex-col rounded-2xl border p-4 max-h-60 md:max-h-none ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+            <div className={`${focusMode ? 'hidden ' : ''}w-full md:w-64 flex flex-col rounded-xl border p-4 max-h-60 md:max-h-none ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
               <h3 className="font-bold text-sm uppercase tracking-wider text-slate-500 mb-3">Seus Manuscritos</h3>
               <div className="flex-1 overflow-y-auto space-y-2 pr-1">
                 {books.map(b => (
@@ -3145,7 +3776,7 @@ export default function EstudioApp() {
                     onClick={() => setSelectedBookId(b.id)}
                     className={`w-full text-left p-3 rounded-xl transition-all ${
                       b.id === selectedBookId
-                        ? 'bg-indigo-600 text-white font-medium shadow-md'
+                        ? 'bg-indigo-600 text-white font-medium'
                         : isDark ? 'hover:bg-slate-800/60 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
                     }`}
                   >
@@ -3164,7 +3795,7 @@ export default function EstudioApp() {
             </div>
 
             {/* ÁREA DE TEXTO */}
-            <div className={`flex-1 flex flex-col min-h-0 rounded-2xl border ${isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200'}`}>
+            <div className={`flex-1 flex flex-col min-h-0 rounded-xl border ${isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200'}`}>
 
               <div className={`p-4 border-b flex flex-wrap items-center justify-between gap-4 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
                 <input
@@ -3183,19 +3814,17 @@ export default function EstudioApp() {
                     {saveStatus === 'salvo' ? '✓ Salvo' : saveStatus === 'salvando' ? 'Salvando...' : 'Erro ao salvar'}
                   </span>
 
-                  <button
-                    onClick={() => handleExportTXT(currentBook)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${
-                      isDark ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-300 hover:bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    <Download className="w-3.5 h-3.5" /> Baixar .TXT
-                  </button>
-
-                  <button onClick={() => handleExportWord(currentBook)} className={toolBtn}>Word</button>
-                  <button onClick={() => handlePrintPdf(currentBook)} className={toolBtn}>PDF</button>
                   <button onClick={openHistory} className={toolBtn}>Versões</button>
-                  <button onClick={() => setFocusMode(f => !f)} className={toolBtn}>{focusMode ? 'Sair do foco' : 'Modo foco'}</button>
+                  <button onClick={() => setFocusMode(f => !f)} className={toolBtn}>{focusMode ? 'Sair do foco' : 'Foco'}</button>
+                  <ActionMenu
+                    isDark={isDark}
+                    label="Exportar"
+                    items={[
+                      { label: 'Texto (.txt)', onClick: () => handleExportTXT(currentBook) },
+                      { label: 'Word (.doc)', onClick: () => handleExportWord(currentBook) },
+                      { label: 'PDF (imprimir)', onClick: () => handlePrintPdf(currentBook) }
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -3276,79 +3905,14 @@ export default function EstudioApp() {
           </div>
         )}
 
-        {/* --- CENTRAL DE APRENDIZADO --- */}
+        {/* --- APRENDER --- */}
         {activeTab === 'learning' && (
-          <div className="space-y-6">
-
-            <div className={`flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Central de Aprendizado</h1>
-                <p className={`text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Guias estruturados, teoria literária e técnicas avançadas de narrativa.
-                </p>
-              </div>
-
-              <div className="relative w-full md:w-72">
-                <Search className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Buscar técnicas ou conceitos..."
-                  className={`w-full pl-9 pr-4 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
-                  }`}
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 overflow-x-auto pb-2">
-              {APRENDIZAGEM_CONTEUDO.map((mod) => {
-                const IconComponent = mod.icon;
-                return (
-                  <button
-                    key={mod.id}
-                    onClick={() => setSelectedModule(mod.id)}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
-                      selectedModule === mod.id
-                        ? 'bg-indigo-600 text-white shadow-md'
-                        : isDark ? 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200' : 'bg-white border border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    <IconComponent className="w-4 h-4" />
-                    {mod.title}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {filteredLessons.map((lesson) => (
-                <div
-                  key={lesson.subtitle}
-                  className={`p-6 rounded-2xl border transition-all ${
-                    isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-indigo-600/10 text-indigo-400 border border-indigo-500/20">
-                      {lesson.tag}
-                    </span>
-                  </div>
-
-                  <h3 className="text-lg font-bold mb-2">{lesson.subtitle}</h3>
-                  <p className={`text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                    {lesson.details}
-                  </p>
-                </div>
-              ))}
-
-              {filteredLessons.length === 0 && (
-                <p className="text-sm text-slate-500 col-span-full">Nenhum conteúdo encontrado para a busca.</p>
-              )}
-            </div>
-
-          </div>
+          <LearningTab
+            isDark={isDark}
+            done={learningDone}
+            onToggleDone={handleToggleLesson}
+            onStartExercise={handleStartExercise}
+          />
         )}
 
         {/* --- COMUNIDADE --- */}
@@ -3368,7 +3932,7 @@ export default function EstudioApp() {
             </div>
 
             {/* NOVO POST */}
-            <div className={`rounded-2xl border p-4 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+            <div className={`rounded-xl border p-4 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
               <div className="flex gap-3">
                 <Avatar name={profile.name} color={profile.avatarColor} />
                 <textarea
@@ -3397,7 +3961,7 @@ export default function EstudioApp() {
 
                 <button
                   onClick={handleCreatePost}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium shadow-lg shadow-indigo-600/30 transition-all"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-all"
                 >
                   <Send className="w-4 h-4" /> Publicar
                 </button>
@@ -3412,7 +3976,7 @@ export default function EstudioApp() {
                   onClick={() => setFeedFilter(f.id)}
                   className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                     feedFilter === f.id
-                      ? 'bg-indigo-600 text-white shadow-md'
+                      ? 'bg-indigo-600 text-white'
                       : isDark ? 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200' : 'bg-white border border-slate-200 text-slate-600'
                   }`}
                 >
@@ -3435,7 +3999,7 @@ export default function EstudioApp() {
                 return (
                   <article
                     key={post.id}
-                    className={`rounded-2xl border p-5 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}
+                    className={`rounded-xl border p-5 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
@@ -3578,7 +4142,7 @@ export default function EstudioApp() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
               {/* CARTÃO DO PERFIL */}
-              <div className={`rounded-2xl border p-6 flex flex-col items-center text-center ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+              <div className={`rounded-xl border p-6 flex flex-col items-center text-center ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
                 <Avatar name={profile.name} color={profile.avatarColor} src={profile.google?.picture} size="w-24 h-24" text="text-4xl" />
                 <h2 className="text-xl font-bold mt-4">{profile.name}</h2>
                 <p className="text-sm text-slate-500">@{profile.handle}</p>
@@ -3620,7 +4184,7 @@ export default function EstudioApp() {
               </div>
 
               {/* FORMULÁRIO */}
-              <div className={`lg:col-span-2 rounded-2xl border p-6 space-y-4 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
+              <div className={`lg:col-span-2 rounded-xl border p-6 space-y-4 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
                 <h3 className="font-bold text-lg">Editar perfil</h3>
 
                 {[
@@ -3688,7 +4252,7 @@ export default function EstudioApp() {
                   <button
                     type="button"
                     onClick={handleSaveProfile}
-                    className="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white shadow-md"
+                    className="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white"
                   >
                     Salvar perfil
                   </button>
@@ -3724,7 +4288,7 @@ export default function EstudioApp() {
           onClick={() => setDeleteConfirmId(null)}
         >
           <div
-            className={`max-w-md w-full border rounded-2xl p-6 shadow-xl ${
+            className={`max-w-md w-full border rounded-xl p-6 shadow-xl ${
               isDark ? 'border-slate-800 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white text-slate-900'
             }`}
             onClick={(event) => event.stopPropagation()}
@@ -3751,7 +4315,7 @@ export default function EstudioApp() {
               <button
                 type="button"
                 onClick={executeDeleteBook}
-                className="px-4 py-2 rounded-xl text-sm font-medium bg-red-600 hover:bg-red-500 text-white shadow-md"
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-red-600 hover:bg-red-500 text-white"
               >
                 Excluir
               </button>
@@ -3769,7 +4333,7 @@ export default function EstudioApp() {
           onClick={() => setOrganizeTarget(null)}
         >
           <div
-            className={`max-w-md w-full border rounded-2xl p-6 shadow-xl space-y-4 ${
+            className={`max-w-md w-full border rounded-xl p-6 shadow-xl space-y-4 ${
               isDark ? 'border-slate-800 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white text-slate-900'
             }`}
             onClick={(event) => event.stopPropagation()}
@@ -3820,7 +4384,7 @@ export default function EstudioApp() {
               <button
                 type="button"
                 onClick={saveOrganize}
-                className="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white shadow-md"
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white"
               >
                 Salvar
               </button>
@@ -3838,7 +4402,7 @@ export default function EstudioApp() {
           onClick={() => setHistoryOpen(false)}
         >
           <div
-            className={`max-w-lg w-full max-h-[80vh] flex flex-col border rounded-2xl p-6 shadow-xl ${
+            className={`max-w-lg w-full max-h-[80vh] flex flex-col border rounded-xl p-6 shadow-xl ${
               isDark ? 'border-slate-800 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white text-slate-900'
             }`}
             onClick={(event) => event.stopPropagation()}
@@ -3877,7 +4441,7 @@ export default function EstudioApp() {
       {toast && (
         <div
           role="status"
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-3 rounded-xl bg-indigo-600 text-white text-sm font-medium shadow-xl"
+          className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-3 rounded-xl bg-indigo-600 text-white text-sm font-medium shadow-xl"
         >
           {toast}
         </div>
