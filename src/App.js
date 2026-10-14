@@ -1721,7 +1721,7 @@ const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 const bookToRow = (uid, b) => ({
-  user_id: uid,
+  account_id: uid,
   id: b.id,
   title: b.title || '',
   author: b.author || '',
@@ -1732,7 +1732,14 @@ const bookToRow = (uid, b) => ({
   tags: b.tags || [],
   collection: b.collection || '',
   updated_ms: b.updatedAt || Date.now(),
-  deleted: false
+  deleted: false,
+  visibility: b.visibility || 'private',
+  allow_save: !!b.allowSave && b.visibility !== 'private' && !!b.visibility,
+  readonly: !!b.readonly,
+  origin_owner: b.originOwner || null,
+  origin_book_id: b.originBookId || null,
+  origin_username: b.originUsername || '',
+  origin_title: b.originTitle || ''
 });
 
 const rowToBook = (r) => ({
@@ -1745,11 +1752,18 @@ const rowToBook = (r) => ({
   content: r.content,
   tags: r.tags || [],
   collection: r.collection || '',
-  updatedAt: Number(r.updated_ms) || 0
+  updatedAt: Number(r.updated_ms) || 0,
+  visibility: r.visibility || 'private',
+  allowSave: !!r.allow_save,
+  readonly: !!r.readonly,
+  originOwner: r.origin_owner || null,
+  originBookId: r.origin_book_id || null,
+  originUsername: r.origin_username || '',
+  originTitle: r.origin_title || ''
 });
 
 const pdfToRow = (uid, p) => ({
-  user_id: uid,
+  account_id: uid,
   id: p.id,
   title: p.title || '',
   file_name: p.fileName || '',
@@ -1784,7 +1798,7 @@ const cloudPushBook = async (uid, book) => {
 
 const cloudDeleteBook = async (uid, id) => {
   const { error } = await supabase.from('books').upsert({
-    user_id: uid, id, title: '', author: '', genre: '', cover_color: '', synopsis: '', content: '',
+    account_id: uid, id, title: '', author: '', genre: '', cover_color: '', synopsis: '', content: '',
     tags: [], collection: '', updated_ms: Date.now(), deleted: true
   });
   if (error) console.error('Erro ao remover manuscrito na nuvem:', error);
@@ -1806,7 +1820,7 @@ const cloudPushPdf = async (uid, pdf) => {
 const cloudDeletePdf = async (uid, id) => {
   await supabase.storage.from('pdfs').remove([`${uid}/${id}.pdf`]);
   const { error } = await supabase.from('pdfs').upsert({
-    user_id: uid, id, title: '', file_name: '', size: '', num_pages: 0, scanned: false,
+    account_id: uid, id, title: '', file_name: '', size: '', num_pages: 0, scanned: false,
     tags: [], collection: '', uploaded_at: '', updated_ms: Date.now(), deleted: true
   });
   if (error) console.error('Erro ao remover PDF na nuvem:', error);
@@ -1816,10 +1830,10 @@ const mapCloudPost = (row, uid) => ({
   id: row.id,
   isMine: row.author_id === uid,
   authorId: row.author_id,
-  authorName: (row.author && row.author.name) || 'Autor',
-  authorHandle: (row.author && row.author.handle) || 'autor',
+  authorName: (row.author && row.author.display_name) || 'Autor',
+  authorHandle: (row.author && row.author.username) || 'autor',
   authorColor: (row.author && row.author.avatar_color) || AVATAR_GRADIENTS[0],
-  authorPicture: (row.author && row.author.avatar_url) || '',
+  authorPicture: mediaUrl(row.author && row.author.avatar_path),
   text: row.text || '',
   createdAt: row.created_at,
   likes: (row.likes || []).length,
@@ -1828,7 +1842,7 @@ const mapCloudPost = (row, uid) => ({
     .map(c => ({
       id: c.id,
       isMine: c.author_id === uid,
-      authorName: (c.author && c.author.name) || 'Autor',
+      authorName: (c.author && c.author.display_name) || 'Autor',
       text: c.text,
       createdAt: c.created_at
     }))
@@ -1843,7 +1857,7 @@ const mapCloudPost = (row, uid) => ({
 const cloudFetchPosts = async (uid) => {
   const { data, error } = await supabase
     .from('posts')
-    .select('id, author_id, text, shared_book, shared_pdf, visibility, share_token, pdf_id, created_at, author:profiles(name, handle, avatar_color, avatar_url), comments(id, author_id, text, created_at, author:profiles(name)), likes(user_id)')
+    .select('id, author_id, text, shared_book, shared_pdf, visibility, share_token, pdf_id, created_at, author:profiles(display_name, username, avatar_color, avatar_path), comments(id, author_id, text, created_at, author:profiles(display_name)), likes(user_id)')
     .order('created_at', { ascending: false })
     .limit(100);
   if (error) throw error;
@@ -1857,49 +1871,6 @@ const cloudFetchPostText = async (postId) => {
   return data.shared_text || '';
 };
 
-const AccountCard = ({ isDark, session, onSignIn, onSignOut, blockedCount, onUnblockAll }) => {
-  const user = session && session.user;
-  const meta = (user && user.user_metadata) || {};
-  const picture = meta.avatar_url || meta.picture || '';
-  return (
-    <div className={`w-full mt-6 pt-6 border-t text-left ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-      <p className="text-xs font-semibold text-slate-500 mb-3">Conta</p>
-      {user ? (
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            {picture && <img src={picture} alt="" referrerPolicy="no-referrer" className="w-9 h-9 rounded-full" />}
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold truncate">{meta.full_name || meta.name || 'Conta Google'}</p>
-              <p className="text-xs text-slate-500 truncate">{user.email}</p>
-            </div>
-            <button type="button" onClick={onSignOut} className="p-2 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors" title="Sair da conta">
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-          <p className="text-xs text-emerald-500">Sincronização ativa: seus textos e PDFs acompanham você em qualquer aparelho.</p>
-          {blockedCount > 0 && (
-            <button type="button" onClick={onUnblockAll} className="text-xs underline text-slate-500">
-              Desbloquear {blockedCount} {blockedCount === 1 ? 'usuário' : 'usuários'}
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={onSignIn}
-            className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
-              isDark ? 'border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200' : 'border-slate-300 bg-white hover:bg-slate-50 text-slate-700'
-            }`}
-          >
-            Entrar com Google
-          </button>
-          <p className="text-xs text-slate-500">Entre para sincronizar seus textos e PDFs e participar da comunidade.</p>
-        </div>
-      )}
-    </div>
-  );
-};
 
 // --- INTERFACE: menu de ações e aba "Aprender" ---
 const ActionMenu = ({ isDark, items, label, up }) => {
@@ -2226,6 +2197,901 @@ const LearningTab = ({ isDark, done, onToggleDone, onStartExercise }) => {
   );
 };
 
+// --- CONTAS (usuário e senha), COMUNIDADE SOCIAL E PREFÁCIOS ---
+const AUTH_ERRORS = {
+  invalid_credentials: 'Usuário ou senha incorretos.',
+  locked: 'Muitas tentativas erradas. Tente novamente em 15 minutos.',
+  username_taken: 'Esse nome de usuário não está disponível.',
+  invalid_username: 'Use de 3 a 20 caracteres: letras minúsculas, números ou _.',
+  weak_password: 'A senha deve ter de 8 a 72 caracteres.',
+  not_authenticated: 'Não foi possível iniciar a sessão. Tente de novo.',
+  session_error: 'Não foi possível iniciar a sessão. Se você administra o site, ative "Allow anonymous sign-ins" no Supabase.',
+  network: 'Não foi possível conectar. Verifique a internet e tente de novo.'
+};
+
+const PREFACE_ERRORS = {
+  book_not_found: 'O livro ainda não chegou à nuvem. Aguarde alguns segundos e tente de novo.',
+  already_has_preface: 'Este livro já tem um prefácio aprovado.',
+  already_invited: 'Esse autor já está escrevendo o prefácio.',
+  blocked: 'Não é possível convidar este usuário.',
+  invalid: 'Convite inválido.',
+  too_short: 'Escreva um pouco mais (mínimo de 20 caracteres).',
+  not_found: 'Usuário não encontrado.'
+};
+
+const SAVE_ERRORS = {
+  already_saved: 'Você já salvou este livro.',
+  not_allowed: 'O autor não permite salvar cópias.',
+  not_found: 'Livro indisponível.',
+  own_book: 'Este livro já é seu.'
+};
+
+const mediaUrl = (path) => (supabase && path ? supabase.storage.from('media').getPublicUrl(path).data.publicUrl : '');
+
+const rpc = async (name, args) => {
+  const { data, error } = await supabase.rpc(name, args || {});
+  if (error) {
+    console.error(name, error);
+    return null;
+  }
+  return data;
+};
+
+const formatCode = (c) => String(c || '').replace(/(.{4})(?=.)/g, '$1-');
+
+const composeWithPreface = (book, preface) => (preface && preface.text
+  ? `PREFÁCIO\n\n${preface.text}\n\n— ${preface.by_name} (@${preface.by_username})\n\n* * *\n\n${book.content || ''}`
+  : (book.content || ''));
+
+const buildPrefaceMap = (d) => {
+  const map = {};
+  ((d && d.sent) || []).forEach(i => {
+    if (i.status === 'approved') map[i.book_id] = { text: i.preface_text, by_name: i.other_name, by_username: i.other_username };
+  });
+  return map;
+};
+
+// Reduz e recorta a imagem no tamanho certo (foto quadrada ou capa larga)
+const resizeImage = (file, w, h) => new Promise((resolve, reject) => {
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const scale = Math.max(w / img.width, h / img.height);
+    const dw = img.width * scale;
+    const dh = img.height * scale;
+    ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+    URL.revokeObjectURL(url);
+    canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('Falha ao processar a imagem'))), 'image/jpeg', 0.85);
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Imagem inválida')); };
+  img.src = url;
+});
+
+const AuthCard = ({ isDark, enabled, account, defaultName, onLogin, onSignup, onReset, onChangePassword, onLogout, blockedCount, onUnblockAll }) => {
+  const [mode, setMode] = useState('login');
+  const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState(defaultName || '');
+  const [password, setPassword] = useState('');
+  const [password2, setPassword2] = useState('');
+  const [code, setCode] = useState('');
+  const [newCode, setNewCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
+
+  const wrap = `w-full mt-6 pt-6 border-t text-left ${isDark ? 'border-slate-800' : 'border-slate-200'}`;
+  const field = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+    isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
+  }`;
+  const link = 'text-xs text-indigo-400 hover:underline';
+
+  const switchMode = (m) => {
+    setMode(m);
+    setError('');
+    setPassword('');
+    setPassword2('');
+    setCode('');
+  };
+
+  const run = async (fn) => {
+    setBusy(true);
+    setError('');
+    setInfo('');
+    const r = await fn();
+    setBusy(false);
+    if (!r || !r.ok) {
+      setError(AUTH_ERRORS[(r && r.error) || 'network'] || AUTH_ERRORS.network);
+      return null;
+    }
+    return r;
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (mode === 'login') {
+      const r = await run(() => onLogin(username, password));
+      if (r) switchMode('login');
+    } else if (mode === 'signup') {
+      if (password !== password2) { setError('As senhas não conferem.'); return; }
+      const r = await run(() => onSignup(username, password, displayName));
+      if (r) { setNewCode(formatCode(r.recovery_code)); switchMode('login'); }
+    } else if (mode === 'reset') {
+      const r = await run(() => onReset(username, code, password));
+      if (r) { setNewCode(formatCode(r.recovery_code)); switchMode('login'); setInfo('Senha redefinida. Entre com a nova senha.'); }
+    } else if (mode === 'password') {
+      const r = await run(() => onChangePassword(password, password2));
+      if (r) { setNewCode(formatCode(r.recovery_code)); switchMode('login'); setInfo('Senha alterada.'); }
+    }
+  };
+
+  if (!enabled) {
+    return (
+      <div className={wrap}>
+        <p className="text-xs font-semibold text-slate-500 mb-2">Conta</p>
+        <p className="text-xs text-slate-500">Contas ainda não estão ativadas neste site.</p>
+      </div>
+    );
+  }
+
+  const codeBox = newCode ? (
+    <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+      <p className="text-xs font-semibold text-amber-500">Guarde este código de recuperação</p>
+      <p className="font-mono text-sm break-all select-all">{newCode}</p>
+      <p className="text-xs text-slate-500">É a única forma de redefinir a senha se você esquecê-la. Ele não será mostrado de novo.</p>
+      <div className="flex gap-3">
+        <button type="button" onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(newCode); }} className={link}>Copiar</button>
+        <button type="button" onClick={() => setNewCode('')} className={link}>Já guardei</button>
+      </div>
+    </div>
+  ) : null;
+
+  if (account && mode !== 'password') {
+    return (
+      <div className={wrap}>
+        <p className="text-xs font-semibold text-slate-500 mb-3">Conta</p>
+        {codeBox}
+        {info && <p className="text-xs text-emerald-500 mb-3">{info}</p>}
+        <p className="text-sm font-semibold truncate">{account.display_name}</p>
+        <p className="text-xs text-slate-500 mb-3">@{account.username} • sincronização ativa</p>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <button type="button" onClick={() => onLogout(false)} className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors border-slate-500/40 hover:bg-slate-500/10">Sair</button>
+          <button type="button" onClick={() => switchMode('password')} className={link}>Alterar senha</button>
+          <button type="button" onClick={() => onLogout(true)} className="text-xs text-rose-500 hover:underline">Sair e limpar este aparelho</button>
+        </div>
+        {blockedCount > 0 && (
+          <button type="button" onClick={onUnblockAll} className="mt-3 text-xs underline text-slate-500">
+            Desbloquear {blockedCount} {blockedCount === 1 ? 'usuário' : 'usuários'}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const titles = { login: 'Entrar', signup: 'Criar conta', reset: 'Redefinir senha', password: 'Alterar senha' };
+  const passLabel = { login: 'Senha', signup: 'Senha (mínimo de 8 caracteres)', reset: 'Nova senha', password: 'Senha atual' }[mode];
+
+  return (
+    <div className={wrap}>
+      <p className="text-xs font-semibold text-slate-500 mb-3">Conta • {titles[mode]}</p>
+      {codeBox}
+      {info && <p className="text-xs text-emerald-500 mb-3">{info}</p>}
+      <form onSubmit={submit} className="space-y-3">
+        {mode === 'signup' && (
+          <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value.slice(0, 60))}
+            placeholder="Nome de exibição (pode ter espaços)" aria-label="Nome de exibição" className={field} />
+        )}
+        {mode !== 'password' && (
+          <input type="text" value={username} autoComplete="username" autoCapitalize="none"
+            onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20))}
+            placeholder="Nome de usuário (sem @)" aria-label="Nome de usuário" className={field} />
+        )}
+        {mode === 'reset' && (
+          <input type="text" value={code} onChange={(e) => setCode(e.target.value)}
+            placeholder="Código de recuperação" aria-label="Código de recuperação" className={field} />
+        )}
+        <input type="password" value={password} autoComplete={mode === 'login' || mode === 'password' ? 'current-password' : 'new-password'}
+          onChange={(e) => setPassword(e.target.value)} placeholder={passLabel} aria-label={passLabel} className={field} />
+        {(mode === 'signup' || mode === 'password') && (
+          <input type="password" value={password2} autoComplete="new-password"
+            onChange={(e) => setPassword2(e.target.value)}
+            placeholder={mode === 'signup' ? 'Repita a senha' : 'Nova senha (mínimo de 8 caracteres)'}
+            aria-label={mode === 'signup' ? 'Repita a senha' : 'Nova senha'} className={field} />
+        )}
+        {error && <p className="text-xs text-rose-500">{error}</p>}
+        <button type="submit" disabled={busy} className="w-full px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium transition-colors">
+          {busy ? 'Aguarde...' : titles[mode]}
+        </button>
+      </form>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
+        {mode === 'login' && <button type="button" onClick={() => switchMode('signup')} className={link}>Criar conta</button>}
+        {mode === 'login' && <button type="button" onClick={() => switchMode('reset')} className={link}>Esqueci a senha</button>}
+        {mode !== 'login' && <button type="button" onClick={() => switchMode('login')} className={link}>{mode === 'signup' ? 'Já tenho conta' : 'Voltar'}</button>}
+      </div>
+    </div>
+  );
+};
+
+const BookStatusLine = ({ book, preface }) => {
+  const parts = [];
+  if (book.readonly) parts.push(`Cópia de leitura de @${book.originUsername || 'autor'}`);
+  else if (book.visibility === 'public') parts.push('Público');
+  else if (book.visibility === 'friends') parts.push('Só amigos');
+  if (preface) parts.push(`Prefácio de @${preface.by_username}`);
+  if (parts.length === 0) return null;
+  return <p className="text-[11px] text-slate-500 mb-2">{parts.join(' • ')}</p>;
+};
+
+const BookShareModal = ({ isDark, book, onSave, onClose }) => {
+  const [visibility, setVisibility] = useState(book.visibility || 'private');
+  const [allowSave, setAllowSave] = useState(!!book.allowSave);
+  const options = [
+    ['private', 'Privado', 'Só você vê.'],
+    ['friends', 'Amigos', 'Seus amigos podem ler.'],
+    ['public', 'Público', 'Qualquer pessoa com conta pode ler.']
+  ];
+  return (
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className={`max-w-md w-full border rounded-xl p-6 shadow-xl space-y-4 ${isDark ? 'border-slate-800 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white text-slate-900'}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div>
+          <h3 className="font-bold text-lg">Compartilhamento</h3>
+          <p className="text-xs text-slate-500 truncate">{book.title}</p>
+        </div>
+        <div className="space-y-2">
+          {options.map(([value, label, hint]) => (
+            <label key={value} className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer ${visibility === value ? 'border-indigo-500' : isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+              <input type="radio" name="visibility" checked={visibility === value} onChange={() => setVisibility(value)} className="mt-1 accent-indigo-500" />
+              <span>
+                <span className="block text-sm font-semibold">{label}</span>
+                <span className="block text-xs text-slate-500">{hint}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <label className={`flex items-start gap-3 text-sm ${visibility === 'private' ? 'opacity-50' : ''}`}>
+          <input type="checkbox" disabled={visibility === 'private'} checked={allowSave && visibility !== 'private'} onChange={(e) => setAllowSave(e.target.checked)} className="mt-1 accent-indigo-500" />
+          <span>
+            Permitir que leitores salvem uma cópia de leitura (não editável) na biblioteca deles.
+            <span className="block text-xs text-slate-500 mt-1">Quem pode ler consegue copiar o texto. Este botão controla só se o app oferece o "Salvar".</span>
+          </span>
+        </label>
+        <div className="flex justify-end gap-3">
+          <button type="button" onClick={onClose} className={`px-4 py-2 rounded-xl text-sm font-medium border ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'}`}>Cancelar</button>
+          <button type="button" onClick={() => onSave(visibility, allowSave)} className="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white">Salvar</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PrefaceInviteModal = ({ isDark, book, onClose, onSent, showNotification }) => {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [friends, setFriends] = useState([]);
+  const [picked, setPicked] = useState(null);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    rpc('app_social_overview').then(d => { if (d) setFriends(d.friends || []); });
+  }, []);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) { setResults([]); return; }
+    const id = setTimeout(async () => { setResults((await rpc('app_search_profiles', { p_query: q })) || []); }, 350);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  const send = async () => {
+    if (!picked) return;
+    setBusy(true);
+    const r = await rpc('app_preface_invite', { p_book_id: book.id, p_invitee: picked.account_id, p_message: message.trim() });
+    setBusy(false);
+    if (r && r.ok) {
+      showNotification(`Convite enviado para @${picked.username}.`);
+      onSent();
+      onClose();
+    } else {
+      showNotification(PREFACE_ERRORS[r && r.error] || 'Não foi possível enviar o convite.');
+    }
+  };
+
+  const list = query.trim().length >= 2 ? results : friends;
+  const field = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${isDark ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`;
+
+  return (
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className={`max-w-md w-full max-h-[90vh] overflow-y-auto border rounded-xl p-6 shadow-xl space-y-4 ${isDark ? 'border-slate-800 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white text-slate-900'}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div>
+          <h3 className="font-bold text-lg">Convidar para escrever o prefácio</h3>
+          <p className="text-xs text-slate-500 truncate">{book.title}</p>
+        </div>
+        <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar autor por nome ou @usuário" aria-label="Buscar autor" className={field} />
+        <div className={`rounded-xl border divide-y max-h-48 overflow-y-auto ${isDark ? 'border-slate-800 divide-slate-800' : 'border-slate-200 divide-slate-200'}`}>
+          {list.length === 0 && <p className="p-3 text-xs text-slate-500">{query.trim().length >= 2 ? 'Ninguém encontrado.' : 'Digite para buscar. Seus amigos aparecem aqui.'}</p>}
+          {list.map(u => (
+            <button
+              key={u.account_id}
+              type="button"
+              onClick={() => setPicked(u)}
+              className={`w-full flex items-center gap-3 p-3 text-left ${picked && picked.account_id === u.account_id ? 'bg-indigo-600/10' : isDark ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50'}`}
+            >
+              <Avatar name={u.display_name} color={AVATAR_GRADIENTS[0]} src={mediaUrl(u.avatar_path)} size="w-8 h-8" text="text-sm" />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold truncate">{u.display_name}</span>
+                <span className="block text-xs text-slate-500 truncate">@{u.username}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+        {picked && <p className="text-xs text-indigo-400">Convidar: {picked.display_name} (@{picked.username})</p>}
+        <textarea value={message} onChange={(e) => setMessage(e.target.value)} maxLength={500} rows={3} placeholder="Mensagem para o convidado (opcional)" className={`${field} resize-none`} />
+        <p className="text-xs text-slate-500">O convidado poderá ler o livro inteiro para escrever o prefácio. Você aprova antes de ele aparecer.</p>
+        <div className="flex justify-end gap-3">
+          <button type="button" onClick={onClose} className={`px-4 py-2 rounded-xl text-sm font-medium border ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'}`}>Cancelar</button>
+          <button type="button" disabled={!picked || busy} onClick={send} className="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white">
+            {busy ? 'Enviando...' : 'Enviar convite'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PREFACE_STATUS = {
+  pending: 'Convite enviado',
+  accepted: 'Escrevendo',
+  submitted: 'Enviado para aprovação',
+  approved: 'Aprovado',
+  declined: 'Recusado'
+};
+
+const PrefacePanel = ({ isDark, refreshKey, showNotification, onOpenReader, onChanged }) => {
+  const [data, setData] = useState({ sent: [], received: [] });
+  const [writing, setWriting] = useState(null);
+  const [text, setText] = useState('');
+  const [reading, setReading] = useState(null);
+
+  const muted = isDark ? 'text-slate-400' : 'text-slate-600';
+  const line = isDark ? 'border-slate-800' : 'border-slate-200';
+  const card = `rounded-xl border divide-y ${line} ${isDark ? 'divide-slate-800' : 'divide-slate-200'}`;
+  const small = `px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'}`;
+  const primary = 'px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors whitespace-nowrap';
+
+  const load = useCallback(async () => {
+    const d = await rpc('app_preface_list');
+    if (d) { setData(d); onChanged(d); }
+  }, [onChanged]);
+
+  useEffect(() => { load(); }, [refreshKey, load]);
+
+  const act = async (name, args, okMessage) => {
+    const r = await rpc(name, args);
+    if (!r || r.ok === false) {
+      showNotification(PREFACE_ERRORS[r && r.error] || 'Não foi possível concluir a ação.');
+      return false;
+    }
+    if (okMessage) showNotification(okMessage);
+    await load();
+    return true;
+  };
+
+  const readInvited = async (inv) => {
+    const d = await rpc('app_preface_read_book', { p_id: inv.id });
+    if (!d) { showNotification('Não foi possível abrir o livro agora.'); return; }
+    onOpenReader({ title: `${d.title} — ${d.author || inv.other_name}`, content: d.content, key: `pf:${inv.id}` });
+  };
+
+  const submitPreface = async () => {
+    const ok = await act('app_preface_submit', { p_id: writing.id, p_text: text }, 'Prefácio enviado para aprovação!');
+    if (ok) setWriting(null);
+  };
+
+  const remove = async (inv, message) => {
+    if (!window.confirm('Tem certeza?')) return;
+    await act('app_preface_remove', { p_id: inv.id }, message);
+  };
+
+  const receivedActions = (inv) => (
+    <>
+      {inv.status !== 'declined' && <button type="button" onClick={() => readInvited(inv)} className={small}>Ler o livro</button>}
+      {inv.status === 'pending' && <button type="button" onClick={() => act('app_preface_respond', { p_id: inv.id, p_accept: true }, 'Convite aceito.')} className={primary}>Aceitar</button>}
+      {inv.status === 'pending' && <button type="button" onClick={() => act('app_preface_respond', { p_id: inv.id, p_accept: false })} className={small}>Recusar</button>}
+      {(inv.status === 'accepted' || inv.status === 'submitted') && (
+        <button type="button" onClick={() => { setWriting(inv); setText(inv.preface_text || ''); }} className={primary}>
+          {inv.status === 'submitted' ? 'Editar prefácio' : 'Escrever prefácio'}
+        </button>
+      )}
+      {inv.status !== 'approved' && inv.status !== 'pending' && <button type="button" onClick={() => remove(inv)} className={small}>Remover</button>}
+    </>
+  );
+
+  const sentActions = (inv) => (
+    <>
+      {(inv.status === 'submitted' || inv.status === 'approved') && <button type="button" onClick={() => setReading(inv)} className={small}>Ler prefácio</button>}
+      {inv.status === 'submitted' && <button type="button" onClick={() => act('app_preface_review', { p_id: inv.id, p_approve: true }, 'Prefácio aprovado! Ele aparece no início do livro.')} className={primary}>Aprovar</button>}
+      {inv.status === 'submitted' && <button type="button" onClick={() => act('app_preface_review', { p_id: inv.id, p_approve: false }, 'Devolvido para ajustes.')} className={small}>Pedir ajustes</button>}
+      <button type="button" onClick={() => remove(inv, inv.status === 'approved' ? 'Prefácio removido.' : 'Convite cancelado.')} className={small}>
+        {inv.status === 'approved' ? 'Remover prefácio' : 'Cancelar'}
+      </button>
+    </>
+  );
+
+  const row = (inv, mine) => (
+    <div key={inv.id} className="p-4 space-y-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold truncate">{inv.book_title || 'Livro'}</p>
+          <p className={`text-xs ${muted}`}>
+            {mine ? `Convidado: ${inv.other_name} (@${inv.other_username})` : `Autor: ${inv.other_name} (@${inv.other_username})`}
+          </p>
+        </div>
+        <span className={`text-[11px] px-2 py-0.5 rounded-md shrink-0 ${inv.status === 'approved' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-indigo-600/10 text-indigo-400'}`}>
+          {PREFACE_STATUS[inv.status] || inv.status}
+        </span>
+      </div>
+      {!mine && inv.message && <p className={`text-xs italic ${muted}`}>“{inv.message}”</p>}
+      <div className="flex flex-wrap gap-2">{mine ? sentActions(inv) : receivedActions(inv)}</div>
+    </div>
+  );
+
+  const overlay = 'fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4';
+  const box = `max-w-lg w-full max-h-[90vh] overflow-y-auto border rounded-xl p-6 shadow-xl space-y-4 ${isDark ? 'border-slate-800 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white text-slate-900'}`;
+
+  return (
+    <section className="space-y-5 pt-6">
+      <div>
+        <h2 className="text-xl font-bold">Prefácios</h2>
+        <p className={`text-xs mt-1 ${muted}`}>Convide outro autor pelo menu “⋯” de um manuscrito. Prefácios aprovados aparecem no início do livro e no perfil de quem escreveu.</p>
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold">Convites recebidos ({data.received.length})</h3>
+        {data.received.length === 0
+          ? <p className={`text-xs ${muted}`}>Nenhum convite por enquanto.</p>
+          : <div className={card}>{data.received.map(inv => row(inv, false))}</div>}
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold">Prefácios dos meus livros ({data.sent.length})</h3>
+        {data.sent.length === 0
+          ? <p className={`text-xs ${muted}`}>Você ainda não convidou ninguém.</p>
+          : <div className={card}>{data.sent.map(inv => row(inv, true))}</div>}
+      </div>
+
+      {writing && (
+        <div role="dialog" aria-modal="true" className={overlay} onClick={() => setWriting(null)}>
+          <div className={box} onClick={(e) => e.stopPropagation()}>
+            <div>
+              <h3 className="font-bold text-lg">Prefácio de “{writing.book_title}”</h3>
+              <p className="text-xs text-slate-500">Para {writing.other_name} (@{writing.other_username})</p>
+            </div>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              maxLength={20000}
+              rows={14}
+              placeholder="Escreva o prefácio aqui..."
+              className={`w-full px-3 py-2 rounded-xl border text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-500 ${isDark ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
+            />
+            <p className="text-xs text-slate-500">{text.length}/20000 caracteres. O autor precisa aprovar antes de o prefácio aparecer.</p>
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setWriting(null)} className={`px-4 py-2 rounded-xl text-sm font-medium border ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'}`}>Cancelar</button>
+              <button type="button" onClick={submitPreface} className="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white">Enviar para aprovação</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reading && (
+        <div role="dialog" aria-modal="true" className={overlay} onClick={() => setReading(null)}>
+          <div className={box} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-lg">Prefácio de {reading.other_name}</h3>
+                <p className="text-xs text-slate-500">{reading.book_title}</p>
+              </div>
+              <button type="button" onClick={() => setReading(null)} aria-label="Fechar"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap">{reading.preface_text}</p>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+};
+
+const SocialHub = ({ isDark, account, view, setView, profileUsername, openProfile, showNotification, onOpenReader, onBookSaved, onUnreadChange, onEditProfile }) => {
+  const [overview, setOverview] = useState({ friends: [], incoming: [], outgoing: [] });
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [convos, setConvos] = useState([]);
+  const [chat, setChat] = useState(null);
+  const [thread, setThread] = useState([]);
+  const [draft, setDraft] = useState('');
+  const [prof, setProf] = useState(undefined);
+  const threadRef = useRef(null);
+
+  const muted = isDark ? 'text-slate-400' : 'text-slate-600';
+  const line = isDark ? 'border-slate-800' : 'border-slate-200';
+  const card = `rounded-xl border ${line} ${isDark ? 'bg-slate-900/60' : 'bg-white'}`;
+  const divide = isDark ? 'divide-slate-800' : 'divide-slate-200';
+  const small = `px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'}`;
+  const primary = 'px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors whitespace-nowrap';
+  const field = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`;
+
+  const loadOverview = useCallback(async () => {
+    const d = await rpc('app_social_overview');
+    if (d) setOverview(d);
+  }, []);
+
+  const loadConvos = useCallback(async () => {
+    const d = await rpc('app_conversations');
+    if (d) {
+      setConvos(d);
+      onUnreadChange(d.reduce((sum, c) => sum + (Number(c.unread) || 0), 0));
+    }
+  }, [onUnreadChange]);
+
+  const loadThread = useCallback(async () => {
+    if (!chat) return;
+    const d = await rpc('app_thread', { p_other: chat.account_id });
+    if (d) {
+      setThread(d);
+      await rpc('app_mark_read', { p_other: chat.account_id });
+    }
+  }, [chat]);
+
+  useEffect(() => {
+    if (account && view === 'people') loadOverview();
+  }, [account, view, loadOverview]);
+
+  useEffect(() => {
+    if (!account || view !== 'messages') return;
+    loadConvos();
+    const id = setInterval(loadConvos, 20000);
+    return () => clearInterval(id);
+  }, [account, view, loadConvos]);
+
+  useEffect(() => {
+    if (!account || view !== 'messages' || !chat) return;
+    loadThread();
+    const id = setInterval(loadThread, 6000);
+    return () => clearInterval(id);
+  }, [account, view, chat, loadThread]);
+
+  useEffect(() => {
+    if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
+  }, [thread]);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) { setResults([]); return; }
+    const id = setTimeout(async () => { setResults((await rpc('app_search_profiles', { p_query: q })) || []); }, 350);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  useEffect(() => {
+    if (!account || view !== 'profile' || !profileUsername) return;
+    let alive = true;
+    setProf(undefined);
+    rpc('app_get_profile', { p_username: profileUsername }).then(d => { if (alive) setProf(d || null); });
+    return () => { alive = false; };
+  }, [account, view, profileUsername]);
+
+  if (!account) {
+    return <div className={`${card} p-6 text-sm ${muted}`}>Entre na sua conta (aba Perfil) para ver pessoas, mensagens e bibliotecas.</div>;
+  }
+
+  const refreshAfterFriendChange = async () => {
+    await loadOverview();
+    if (query.trim().length >= 2) setResults((await rpc('app_search_profiles', { p_query: query.trim() })) || []);
+    if (view === 'profile' && profileUsername) setProf(await rpc('app_get_profile', { p_username: profileUsername }));
+  };
+
+  const friendAction = async (p, action) => {
+    let r;
+    if (action === 'add') r = await rpc('app_friend_request', { p_account: p.account_id });
+    if (action === 'accept') r = await rpc('app_friend_respond', { p_account: p.account_id, p_accept: true });
+    if (action === 'decline') r = await rpc('app_friend_respond', { p_account: p.account_id, p_accept: false });
+    if (action === 'remove') {
+      if (!window.confirm(`Remover ${p.display_name} dos amigos?`)) return;
+      r = await rpc('app_friend_remove', { p_account: p.account_id });
+    }
+    if (!r || r.ok === false) { showNotification('Não foi possível concluir a ação.'); return; }
+    if (action === 'add') showNotification(r.status === 'accepted' ? 'Vocês agora são amigos!' : 'Pedido de amizade enviado.');
+    await refreshAfterFriendChange();
+  };
+
+  const startChat = (friend) => {
+    setChat({ account_id: friend.account_id, username: friend.username, display_name: friend.display_name, avatar_path: friend.avatar_path });
+    setThread([]);
+    setView('messages');
+  };
+
+  const send = async () => {
+    const body = draft.trim();
+    if (!body || !chat) return;
+    setDraft('');
+    const r = await rpc('app_send_message', { p_to: chat.account_id, p_body: body });
+    if (!r || !r.ok) {
+      showNotification(r && r.error === 'not_friends' ? 'Vocês precisam ser amigos para trocar mensagens.' : 'Não foi possível enviar.');
+      setDraft(body);
+      return;
+    }
+    loadThread();
+  };
+
+  const readBook = async (owner, bookId) => {
+    const d = await rpc('app_read_book', { p_owner: owner, p_book_id: bookId });
+    if (!d) { showNotification('Este livro não está mais disponível.'); return; }
+    onOpenReader({ title: `${d.title} — ${d.author || d.owner_name}`, content: composeWithPreface(d, d.preface), key: `rb:${owner}:${bookId}` });
+  };
+
+  const saveBook = async (owner, bookId) => {
+    const r = await rpc('app_save_book', { p_owner: owner, p_book_id: bookId });
+    if (r && r.ok) {
+      await onBookSaved(r.book);
+      showNotification('Salvo na sua biblioteca como cópia de leitura.');
+    } else {
+      showNotification(SAVE_ERRORS[r && r.error] || 'Não foi possível salvar.');
+    }
+  };
+
+  const blockUser = async (p) => {
+    if (!window.confirm(`Bloquear ${p.display_name}? Ela deixará de aparecer para você e vocês não poderão trocar mensagens.`)) return;
+    const r = await rpc('app_block_user', { p_account: p.account_id });
+    if (!r || !r.ok) { showNotification('Não foi possível bloquear agora.'); return; }
+    showNotification('Usuário bloqueado.');
+    setView('people');
+  };
+
+  const personRow = (p, right) => (
+    <div key={p.account_id} className="flex items-center gap-3 px-4 py-3">
+      <button type="button" onClick={() => openProfile(p.username)} className="flex items-center gap-3 min-w-0 flex-1 text-left">
+        <Avatar name={p.display_name} color={AVATAR_GRADIENTS[0]} src={mediaUrl(p.avatar_path)} />
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold truncate">{p.display_name}</span>
+          <span className="block text-xs text-slate-500 truncate">@{p.username}</span>
+        </span>
+      </button>
+      <div className="shrink-0 flex items-center gap-2">{right}</div>
+    </div>
+  );
+
+  const relationButton = (p, relation) => {
+    if (relation === 'friend') return <span className="text-xs text-emerald-500">Amigos</span>;
+    if (relation === 'sent') return <span className="text-xs text-slate-500">Pedido enviado</span>;
+    if (relation === 'received') return <button type="button" onClick={() => friendAction(p, 'accept')} className={primary}>Aceitar</button>;
+    return <button type="button" onClick={() => friendAction(p, 'add')} className={primary}>Adicionar</button>;
+  };
+
+  const renderPeople = () => (
+    <div className="space-y-6">
+      <div className="relative">
+        <Search className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
+        <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar pessoas por nome ou @usuário..." aria-label="Buscar pessoas" className={`${field} pl-9`} />
+      </div>
+
+      {query.trim().length >= 2 && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold">Resultados</h2>
+          {results.length === 0
+            ? <p className={`text-sm ${muted}`}>Ninguém encontrado.</p>
+            : <div className={`${card} divide-y ${divide}`}>{results.map(p => personRow(p, relationButton(p, p.relation)))}</div>}
+        </section>
+      )}
+
+      {overview.incoming.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold">Pedidos de amizade ({overview.incoming.length})</h2>
+          <div className={`${card} divide-y ${divide}`}>
+            {overview.incoming.map(p => personRow(p, (
+              <>
+                <button type="button" onClick={() => friendAction(p, 'accept')} className={primary}>Aceitar</button>
+                <button type="button" onClick={() => friendAction(p, 'decline')} className={small}>Recusar</button>
+              </>
+            )))}
+          </div>
+        </section>
+      )}
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold">Amigos ({overview.friends.length})</h2>
+        {overview.friends.length === 0
+          ? <p className={`text-sm ${muted}`}>Você ainda não tem amigos. Busque pessoas acima e envie um pedido.</p>
+          : (
+            <div className={`${card} divide-y ${divide}`}>
+              {overview.friends.map(p => personRow(p, (
+                <>
+                  <button type="button" onClick={() => startChat(p)} className={small}>Mensagem</button>
+                  <button type="button" onClick={() => friendAction(p, 'remove')} className={small}>Remover</button>
+                </>
+              )))}
+            </div>
+          )}
+      </section>
+
+      {overview.outgoing.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold">Pedidos enviados ({overview.outgoing.length})</h2>
+          <div className={`${card} divide-y ${divide}`}>
+            {overview.outgoing.map(p => personRow(p, <button type="button" onClick={() => friendAction(p, 'remove')} className={small}>Cancelar</button>))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+
+  const renderMessages = () => {
+    if (chat) {
+      return (
+        <div className={`${card} flex flex-col h-[70vh]`}>
+          <div className={`flex items-center gap-3 px-4 py-3 border-b ${line}`}>
+            <button type="button" onClick={() => { setChat(null); loadConvos(); }} className={`${muted} hover:text-indigo-400`} aria-label="Voltar para as conversas">
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button type="button" onClick={() => openProfile(chat.username)} className="flex items-center gap-2 min-w-0 text-left">
+              <Avatar name={chat.display_name} color={AVATAR_GRADIENTS[0]} src={mediaUrl(chat.avatar_path)} size="w-8 h-8" text="text-sm" />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold truncate">{chat.display_name}</span>
+                <span className="block text-xs text-slate-500 truncate">@{chat.username}</span>
+              </span>
+            </button>
+          </div>
+          <div ref={threadRef} className="flex-1 overflow-y-auto p-4 space-y-2">
+            {thread.length === 0 && <p className={`text-sm ${muted}`}>Comece a conversa com {chat.display_name}.</p>}
+            {thread.map(m => (
+              <div key={m.id} className={`flex ${m.sender === account.id ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm whitespace-pre-wrap break-words ${m.sender === account.id ? 'bg-indigo-600 text-white' : isDark ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                  {m.body}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className={`flex gap-2 p-3 border-t ${line}`}>
+            <input
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
+              maxLength={2000}
+              placeholder="Escreva uma mensagem..."
+              aria-label="Mensagem"
+              className={field}
+            />
+            <button type="button" onClick={send} className={primary}>Enviar</button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-3">
+        {convos.length === 0
+          ? <p className={`text-sm ${muted}`}>Suas conversas aparecem aqui. Você pode trocar mensagens com seus amigos: busque pessoas na aba Pessoas.</p>
+          : (
+            <div className={`${card} divide-y ${divide}`}>
+              {convos.map(c => (
+                <button key={c.account_id} type="button" onClick={() => startChat(c)} className={`w-full flex items-center gap-3 px-4 py-3 text-left ${isDark ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50'}`}>
+                  <Avatar name={c.display_name} color={AVATAR_GRADIENTS[0]} src={mediaUrl(c.avatar_path)} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold truncate">{c.display_name}</span>
+                    <span className={`block text-xs truncate ${muted}`}>{c.last_body || 'Nenhuma mensagem ainda'}</span>
+                  </span>
+                  {Number(c.unread) > 0 && <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-indigo-600 text-white text-[11px] font-semibold flex items-center justify-center">{c.unread}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+      </div>
+    );
+  };
+
+  const renderProfile = () => {
+    if (prof === undefined) return <p className={`text-sm ${muted}`}>Carregando perfil...</p>;
+    if (prof === null) return <div className={`${card} p-6 text-sm ${muted}`}>Perfil não encontrado.</div>;
+    const cover = mediaUrl(prof.cover_path);
+    const isSelf = prof.relation === 'self';
+    const person = { account_id: prof.account_id, username: prof.username, display_name: prof.display_name, avatar_path: prof.avatar_path };
+    const visLabel = (v) => (v === 'public' ? 'Público' : v === 'friends' ? 'Amigos' : 'Privado');
+
+    return (
+      <div className="space-y-6">
+        <button type="button" onClick={() => setView('people')} className={`flex items-center gap-1 text-sm ${muted} hover:text-indigo-400 transition-colors`}>
+          <ChevronLeft className="w-4 h-4" /> Pessoas
+        </button>
+
+        <div className={`${card} overflow-hidden`}>
+          <div className={`h-32 bg-gradient-to-br ${prof.avatar_color || AVATAR_GRADIENTS[0]}`}>
+            {cover && <img src={cover} alt="" className="w-full h-full object-cover" />}
+          </div>
+          <div className="px-5 pb-5">
+            <div className={`-mt-10 mb-3 inline-block rounded-full ring-4 ${isDark ? 'ring-slate-900' : 'ring-white'}`}>
+              <Avatar name={prof.display_name} color={prof.avatar_color || AVATAR_GRADIENTS[0]} src={mediaUrl(prof.avatar_path)} size="w-20 h-20" text="text-3xl" />
+            </div>
+            <h1 className="text-xl font-bold">{prof.display_name}</h1>
+            <p className="text-sm text-slate-500">@{prof.username}</p>
+            {prof.bio && <p className="text-sm mt-3 whitespace-pre-wrap">{prof.bio}</p>}
+            <p className={`text-xs mt-3 ${muted}`}>
+              {prof.friends_count} {Number(prof.friends_count) === 1 ? 'amigo' : 'amigos'}
+              {prof.favorite_genre ? ` • Gênero favorito: ${prof.favorite_genre}` : ''}
+            </p>
+            <div className="flex flex-wrap gap-2 mt-4">
+              {isSelf && <button type="button" onClick={onEditProfile} className={primary}>Editar meu perfil</button>}
+              {prof.relation === 'friend' && <button type="button" onClick={() => startChat(person)} className={primary}>Mensagem</button>}
+              {prof.relation === 'friend' && <button type="button" onClick={() => friendAction(person, 'remove')} className={small}>Remover amigo</button>}
+              {prof.relation === 'none' && <button type="button" onClick={() => friendAction(person, 'add')} className={primary}>Adicionar amigo</button>}
+              {prof.relation === 'sent' && <span className={`text-xs self-center ${muted}`}>Pedido enviado</span>}
+              {prof.relation === 'received' && <button type="button" onClick={() => friendAction(person, 'accept')} className={primary}>Aceitar pedido</button>}
+              {prof.relation === 'received' && <button type="button" onClick={() => friendAction(person, 'decline')} className={small}>Recusar</button>}
+              {!isSelf && <button type="button" onClick={() => blockUser(person)} className="text-xs text-slate-500 hover:underline px-2">Bloquear</button>}
+            </div>
+          </div>
+        </div>
+
+        <section className="space-y-3">
+          <h2 className="text-base font-semibold">Biblioteca ({prof.books.length})</h2>
+          {prof.books.length === 0 ? (
+            <p className={`text-sm ${muted}`}>{isSelf ? 'Você ainda não compartilhou nenhum livro. Use “Compartilhamento...” no menu de um manuscrito.' : 'Nenhum livro compartilhado.'}</p>
+          ) : (
+            <div className={`${card} divide-y ${divide}`}>
+              {prof.books.map(b => (
+                <div key={b.id} className="flex items-start gap-3 p-4">
+                  <div className={`w-10 h-14 rounded-md bg-gradient-to-br shrink-0 ${b.cover_color || 'from-indigo-600 to-purple-800'}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold truncate">{b.title}</p>
+                    <p className={`text-xs ${muted}`}>{b.genre || 'Geral'}{isSelf ? ` • ${visLabel(b.visibility)}` : ''}</p>
+                    {b.synopsis && <p className={`text-xs mt-1 line-clamp-2 ${muted}`}>{b.synopsis}</p>}
+                  </div>
+                  <div className="flex flex-col gap-2 shrink-0">
+                    <button type="button" onClick={() => readBook(prof.account_id, b.id)} className={small}>Ler</button>
+                    {!isSelf && b.allow_save && <button type="button" onClick={() => saveBook(prof.account_id, b.id)} className={small}>Salvar</button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {prof.prefaces.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold">Prefácios escritos ({prof.prefaces.length})</h2>
+            <div className={`${card} divide-y ${divide}`}>
+              {prof.prefaces.map(pf => (
+                <div key={`${pf.owner_id}:${pf.book_id}`} className="flex items-center justify-between gap-3 p-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate">{pf.book_title}</p>
+                    <p className={`text-xs ${muted}`}>Livro de {pf.owner_name} (@{pf.owner_username})</p>
+                  </div>
+                  <button type="button" onClick={() => readBook(pf.owner_id, pf.book_id)} className={small}>Ler livro</button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      {view === 'people' && renderPeople()}
+      {view === 'messages' && renderMessages()}
+      {view === 'profile' && renderProfile()}
+    </div>
+  );
+};
+
 // --- COMPONENTE PRINCIPAL ---
 
 export default function EstudioApp() {
@@ -2262,7 +3128,16 @@ export default function EstudioApp() {
   // Conta e nuvem
   const [session, setSession] = useState(null);
   const [blockedIds, setBlockedIds] = useState([]);
-  const sessionUid = session && session.user ? session.user.id : null;
+  const sessionUid = session ? session.id : null;
+  const [communityView, setCommunityView] = useState('feed');
+  const [profileUsername, setProfileUsername] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [prefaceByBook, setPrefaceByBook] = useState({});
+  const [prefaceRefresh, setPrefaceRefresh] = useState(0);
+  const [inviteBook, setInviteBook] = useState(null);
+  const [shareBook, setShareBook] = useState(null);
+  const avatarInputRef = useRef(null);
+  const coverInputRef = useRef(null);
   const cloudOn = !!(supabase && session);
   const booksRef = useRef([]);
   const pdfsRef = useRef([]);
@@ -2442,10 +3317,12 @@ export default function EstudioApp() {
   };
 
   const handleTitleChange = (newTitle) => {
+    if ((books.find(b => b.id === selectedBookId) || {}).readonly) return;
     setBooks(prev => prev.map(b => (b.id === selectedBookId ? { ...b, title: newTitle, updatedAt: Date.now() } : b)));
   };
 
   const handleContentChange = (newContent) => {
+    if ((books.find(b => b.id === selectedBookId) || {}).readonly) return;
     setBooks(prev => prev.map(b => (b.id === selectedBookId ? { ...b, content: newContent, updatedAt: Date.now() } : b)));
   };
 
@@ -2587,21 +3464,25 @@ export default function EstudioApp() {
   const handleSaveProfile = async () => {
     const clean = {
       name: sanitizeInput(profileDraft.name).slice(0, 60) || 'Autor',
-      handle: sanitizeInput(profileDraft.handle).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 24) || 'autor',
+      handle: cloudOn ? profile.handle : (sanitizeInput(profileDraft.handle).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 24) || 'autor'),
       bio: sanitizeInput(profileDraft.bio).slice(0, 300),
       favoriteGenre: sanitizeInput(profileDraft.favoriteGenre).slice(0, 50),
       avatarColor: profileDraft.avatarColor || AVATAR_GRADIENTS[0],
-      google: profile.google || null
+      google: null,
+      avatarUrl: profile.avatarUrl || '',
+      avatarPath: profile.avatarPath || '',
+      coverUrl: profile.coverUrl || '',
+      coverPath: profile.coverPath || ''
     };
     setProfile(clean);
     setProfileDraft(clean);
     const ok = await dbSet('settings', clean, 'profile');
     if (cloudOn) {
       const { error } = await supabase.from('profiles').update({
-        name: clean.name, handle: clean.handle, bio: clean.bio, favorite_genre: clean.favoriteGenre, avatar_color: clean.avatarColor
-      }).eq('id', sessionUid);
+        display_name: clean.name, bio: clean.bio, favorite_genre: clean.favoriteGenre, avatar_color: clean.avatarColor
+      }).eq('account_id', sessionUid);
       if (error) {
-        showNotification(error.code === '23505' ? 'Esse @usuário já está em uso. Escolha outro.' : 'Perfil salvo só neste aparelho (erro ao enviar para a nuvem).');
+        showNotification('Perfil salvo só neste aparelho (erro ao enviar para a nuvem).');
         return;
       }
     }
@@ -2643,7 +3524,7 @@ export default function EstudioApp() {
       return;
     }
     if (supabase && !session) {
-      showNotification('Entre com sua conta Google (aba Perfil) para publicar na comunidade.');
+      showNotification('Entre com sua conta (aba Perfil) para publicar na comunidade.');
       return;
     }
     if (cloudOn) {
@@ -2832,7 +3713,8 @@ export default function EstudioApp() {
 
   const handleBlockUser = async (post) => {
     if (!window.confirm(`Bloquear ${post.authorName}? As publicações dessa pessoa deixarão de aparecer para você.`)) return;
-    const { error } = await supabase.from('blocks').insert({ blocker_id: sessionUid, blocked_id: post.authorId });
+    const blockResult = await rpc('app_block_user', { p_account: post.authorId });
+    const error = !blockResult || blockResult.ok === false;
     if (error) {
       showNotification('Não foi possível bloquear agora.');
       return;
@@ -2847,61 +3729,213 @@ export default function EstudioApp() {
     showNotification('Bloqueios removidos.');
   };
 
-  const handleSignIn = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
-    if (error) showNotification('Não foi possível iniciar o login com o Google.');
+  // --- Conta (usuário e senha) ---
+  const callAuth = async (name, args) => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        const { error: anonError } = await supabase.auth.signInAnonymously();
+        if (anonError) return { ok: false, error: 'session_error' };
+      }
+      const { data: result, error } = await supabase.rpc(name, args);
+      if (error) {
+        console.error(name, error);
+        return { ok: false, error: 'network' };
+      }
+      return result || { ok: false, error: 'network' };
+    } catch (err) {
+      console.error(name, err);
+      return { ok: false, error: 'network' };
+    }
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    await dbSet('settings', { ...profile, google: null }, 'profile');
+  const handleLogin = async (username, password) => {
+    const r = await callAuth('app_login', { p_username: username, p_password: password });
+    if (r.ok) {
+      setSession({ id: r.id, username: r.username, display_name: r.display_name });
+      showNotification(`Bem-vindo, ${r.display_name}!`);
+    }
+    return r;
+  };
+
+  const handleSignup = async (username, password, displayName) => {
+    const r = await callAuth('app_signup', { p_username: username, p_password: password, p_display_name: displayName });
+    if (r.ok) {
+      setSession({ id: r.id, username: r.username, display_name: r.display_name });
+      await supabase.from('profiles').update({
+        bio: profile.bio || '',
+        favorite_genre: profile.favoriteGenre || '',
+        avatar_color: profile.avatarColor || ''
+      }).eq('account_id', r.id);
+      showNotification('Conta criada!');
+    }
+    return r;
+  };
+
+  const handleResetPassword = (username, code, newPassword) =>
+    callAuth('app_reset_password', { p_username: username, p_code: code, p_new: newPassword });
+
+  const handleChangePassword = async (oldPassword, newPassword) => {
+    const r = await callAuth('app_change_password', { p_old: oldPassword, p_new: newPassword });
+    if (r.ok) showNotification('Senha alterada.');
+    return r;
+  };
+
+  const handleLogout = async (wipe) => {
+    if (wipe && !window.confirm('Isso apaga os textos e PDFs guardados neste aparelho (eles continuam na sua conta). Continuar?')) return;
+    try {
+      await supabase.rpc('app_logout');
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error(err);
+    }
+    if (wipe) {
+      await new Promise((resolve) => {
+        const req = indexedDB.deleteDatabase(DB_NAME);
+        req.onsuccess = resolve;
+        req.onerror = resolve;
+        req.onblocked = resolve;
+        setTimeout(resolve, 1500);
+      });
+    }
     window.location.reload();
+  };
+
+  // --- Foto de perfil e capa ---
+  const handleProfileImage = async (kind, file) => {
+    if (!file) return;
+    if (!/^image\//.test(file.type)) {
+      showNotification('Escolha um arquivo de imagem.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showNotification('Imagem muito grande (máximo de 10MB).');
+      return;
+    }
+    try {
+      const blob = await resizeImage(file, kind === 'avatar' ? 400 : 1200, kind === 'avatar' ? 400 : 400);
+      let patch;
+      if (cloudOn) {
+        const path = `${sessionUid}/${kind}-${Date.now()}.jpg`;
+        const up = await supabase.storage.from('media').upload(path, blob, { contentType: 'image/jpeg' });
+        if (up.error) throw up.error;
+        const column = kind === 'avatar' ? 'avatar_path' : 'cover_path';
+        const { error } = await supabase.from('profiles').update({ [column]: path }).eq('account_id', sessionUid);
+        if (error) throw error;
+        const oldPath = kind === 'avatar' ? profile.avatarPath : profile.coverPath;
+        if (oldPath) supabase.storage.from('media').remove([oldPath]);
+        patch = kind === 'avatar' ? { avatarPath: path, avatarUrl: mediaUrl(path) } : { coverPath: path, coverUrl: mediaUrl(path) };
+      } else {
+        const dataUrl = await blobToDataUrl(blob);
+        patch = kind === 'avatar' ? { avatarUrl: dataUrl } : { coverUrl: dataUrl };
+      }
+      const next = { ...profile, ...patch };
+      setProfile(next);
+      setProfileDraft(prev => ({ ...prev, ...patch }));
+      await dbSet('settings', next, 'profile');
+      showNotification(kind === 'avatar' ? 'Foto atualizada!' : 'Capa atualizada!');
+    } catch (err) {
+      console.error(err);
+      showNotification('Não foi possível enviar a imagem agora.');
+    }
+  };
+
+  const handleRemoveProfileImage = async (kind) => {
+    try {
+      let patch;
+      if (cloudOn) {
+        const column = kind === 'avatar' ? 'avatar_path' : 'cover_path';
+        const oldPath = kind === 'avatar' ? profile.avatarPath : profile.coverPath;
+        const { error } = await supabase.from('profiles').update({ [column]: '' }).eq('account_id', sessionUid);
+        if (error) throw error;
+        if (oldPath) supabase.storage.from('media').remove([oldPath]);
+        patch = kind === 'avatar' ? { avatarPath: '', avatarUrl: '' } : { coverPath: '', coverUrl: '' };
+      } else {
+        patch = kind === 'avatar' ? { avatarUrl: '' } : { coverUrl: '' };
+      }
+      const next = { ...profile, ...patch };
+      setProfile(next);
+      setProfileDraft(prev => ({ ...prev, ...patch }));
+      await dbSet('settings', next, 'profile');
+    } catch (err) {
+      console.error(err);
+      showNotification('Não foi possível remover a imagem agora.');
+    }
+  };
+
+  // --- Compartilhamento de manuscritos, prefácios e perfis ---
+  const handleSaveSharing = async (visibility, allowSave) => {
+    const target = shareBook;
+    if (!target) return;
+    const updated = {
+      ...(books.find(b => b.id === target.id) || target),
+      visibility,
+      allowSave: visibility === 'private' ? false : allowSave,
+      updatedAt: Date.now()
+    };
+    setBooks(prev => prev.map(b => (b.id === updated.id ? updated : b)));
+    await dbSet('books', updated);
+    if (cloudOn) {
+      const ok = await cloudPushBook(sessionUid, updated);
+      showNotification(ok ? 'Compartilhamento atualizado.' : 'Salvo só neste aparelho (falha ao enviar para a nuvem).');
+    }
+    setShareBook(null);
+  };
+
+  const openInvite = async (book) => {
+    if (!cloudOn) {
+      showNotification('Entre na sua conta (aba Perfil) para convidar um autor.');
+      return;
+    }
+    const synced = await cloudPushBook(sessionUid, book);
+    if (!synced) {
+      showNotification('Não foi possível enviar o livro para a nuvem agora.');
+      return;
+    }
+    setInviteBook(book);
+  };
+
+  const handlePrefaceData = useCallback((d) => setPrefaceByBook(buildPrefaceMap(d)), []);
+
+  const openProfile = (username) => {
+    setProfileUsername(username);
+    setCommunityView('profile');
+    setActiveTab('community');
+    window.scrollTo({ top: 0 });
+  };
+
+  const addSavedBook = async (row) => {
+    const saved = rowToBook(row);
+    setBooks(prev => [saved, ...prev.filter(b => b.id !== saved.id)]);
+    await dbSet('books', saved);
   };
 
   // Sincroniza perfil, manuscritos, PDFs e comunidade ao entrar
   const syncCloud = async (user) => {
     const uid = user.id;
-    const meta = user.user_metadata || {};
     try {
       // 1) Perfil
-      const { data: prof } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
-      let base = prof;
-      const cloudIsFresh = prof && !prof.bio && !prof.favorite_genre && !prof.avatar_color;
-      if (prof && cloudIsFresh && profile.name && profile.name !== 'Autor') {
-        const patch = {
-          name: profile.name,
-          bio: profile.bio || '',
-          favorite_genre: profile.favoriteGenre || '',
-          avatar_color: profile.avatarColor || AVATAR_GRADIENTS[0]
+      const { data: prof } = await supabase.from('profiles').select('*').eq('account_id', uid).maybeSingle();
+      if (prof) {
+        const nextProfile = {
+          name: prof.display_name || 'Autor',
+          handle: prof.username,
+          bio: prof.bio || '',
+          favoriteGenre: prof.favorite_genre || '',
+          avatarColor: prof.avatar_color || AVATAR_GRADIENTS[0],
+          avatarPath: prof.avatar_path || '',
+          avatarUrl: mediaUrl(prof.avatar_path),
+          coverPath: prof.cover_path || '',
+          coverUrl: mediaUrl(prof.cover_path),
+          google: null
         };
-        const { error: e1 } = await supabase.from('profiles').update(patch).eq('id', uid);
-        if (!e1) base = { ...prof, ...patch };
-        if (profile.handle && profile.handle !== 'autor') {
-          const { error: e2 } = await supabase.from('profiles').update({ handle: profile.handle }).eq('id', uid);
-          if (!e2) base = { ...base, handle: profile.handle };
-        }
+        setProfile(nextProfile);
+        setProfileDraft(nextProfile);
+        await dbSet('settings', nextProfile, 'profile');
       }
-      const google = {
-        sub: uid,
-        email: user.email || '',
-        name: meta.full_name || meta.name || '',
-        picture: meta.avatar_url || meta.picture || '',
-        linkedAt: new Date().toISOString()
-      };
-      const nextProfile = {
-        name: (base && base.name) || google.name || 'Autor',
-        handle: (base && base.handle) || 'autor',
-        bio: (base && base.bio) || '',
-        favoriteGenre: (base && base.favorite_genre) || '',
-        avatarColor: (base && base.avatar_color) || AVATAR_GRADIENTS[0],
-        google
-      };
-      setProfile(nextProfile);
-      setProfileDraft(nextProfile);
-      await dbSet('settings', nextProfile, 'profile');
 
       // 2) Manuscritos (vale a edição mais recente; exclusões também sincronizam)
-      const { data: bRows, error: bErr } = await supabase.from('books').select('*').eq('user_id', uid);
+      const { data: bRows, error: bErr } = await supabase.from('books').select('*').eq('account_id', uid);
       if (bErr) throw bErr;
       let mergedBooks = [...booksRef.current];
       const pushBooks = [];
@@ -2941,7 +3975,7 @@ export default function EstudioApp() {
       setSelectedBookId(prev => (mergedBooks.some(b => b.id === prev) ? prev : (mergedBooks[0] ? mergedBooks[0].id : '')));
 
       // 3) PDFs
-      const { data: pRows, error: pErr } = await supabase.from('pdfs').select('*').eq('user_id', uid);
+      const { data: pRows, error: pErr } = await supabase.from('pdfs').select('*').eq('account_id', uid);
       if (pErr) throw pErr;
       let mergedPdfs = [...pdfsRef.current];
       const cloudPdfIds = new Set();
@@ -2986,6 +4020,11 @@ export default function EstudioApp() {
       const { data: blocks } = await supabase.from('blocks').select('blocked_id').eq('blocker_id', uid);
       setBlockedIds((blocks || []).map(b => b.blocked_id));
       setPosts(await cloudFetchPosts(uid));
+
+      const prefaces = await rpc('app_preface_list');
+      if (prefaces) handlePrefaceData(prefaces);
+      const unread = await rpc('app_unread_count');
+      if (typeof unread === 'number') setUnreadCount(unread);
 
       showNotification('Conta sincronizada!');
     } catch (err) {
@@ -3052,7 +4091,7 @@ export default function EstudioApp() {
 
   const handleTogglePublishPdf = async (pdf, visibility = 'public') => {
     if (supabase && !session) {
-      showNotification('Entre com sua conta Google (aba Perfil) para compartilhar.');
+      showNotification('Entre com sua conta (aba Perfil) para compartilhar.');
       return;
     }
     if (cloudOn) { await cloudTogglePublishPdf(pdf, visibility); return; }
@@ -3286,19 +4325,40 @@ export default function EstudioApp() {
     }
   }, [isLoaded, dayBaseline, totalWords]);
 
-  // Sessão (login com Google via Supabase)
+  // Sessão: reconhece a conta ligada a este navegador
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
-    return () => sub.subscription.unsubscribe();
+    let alive = true;
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        if (alive) setSession(null);
+        return;
+      }
+      const me = await rpc('app_me');
+      if (alive) setSession(me || null);
+    })();
+    return () => { alive = false; };
   }, []);
 
   // Sincroniza uma vez por login
   useEffect(() => {
     if (!supabase || !sessionUid || !isLoaded) return;
-    syncCloud(session.user);
+    syncCloud(session);
   }, [sessionUid, isLoaded]);
+
+  // Contador de mensagens não lidas
+  useEffect(() => {
+    if (!supabase || !sessionUid) return;
+    let cancelled = false;
+    const load = async () => {
+      const n = await rpc('app_unread_count');
+      if (!cancelled && typeof n === 'number') setUnreadCount(n);
+    };
+    load();
+    const id = setInterval(load, 30000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [sessionUid]);
 
   // Mantém a comunidade atualizada enquanto a aba está aberta
   useEffect(() => {
@@ -3688,6 +4748,7 @@ export default function EstudioApp() {
                         {book.synopsis || 'Sem sinopse informada.'}
                       </p>
                       <TagChips item={book} isDark={isDark} />
+                      <BookStatusLine book={book} preface={prefaceByBook[book.id]} />
                     </div>
 
                     <div className={`flex items-center justify-between pt-3 border-t text-xs ${isDark ? 'border-slate-800/50' : 'border-slate-200'}`}>
@@ -3697,7 +4758,7 @@ export default function EstudioApp() {
 
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => openFlipbook({ ...book, key: `book:${book.id}` })}
+                          onClick={() => openFlipbook({ ...book, content: composeWithPreface(book, prefaceByBook[book.id]), key: `book:${book.id}` })}
                           className="p-2 rounded-lg hover:bg-indigo-600/10 text-indigo-400 transition-colors"
                           title="Ler"
                         >
@@ -3717,6 +4778,10 @@ export default function EstudioApp() {
                           isDark={isDark}
                           up
                           items={[
+                            ...(supabase && !book.readonly ? [
+                              { label: 'Compartilhamento...', onClick: () => (cloudOn ? setShareBook(book) : showNotification('Entre na sua conta (aba Perfil) para compartilhar.')) },
+                              { label: 'Convidar prefaciador...', onClick: () => openInvite(book) }
+                            ] : []),
                             { label: 'Etiquetas e coleção', onClick: () => openOrganize('book', book) },
                             { label: 'Exportar JSON', onClick: () => handleExportJSON(book) },
                             { label: 'Excluir', danger: true, onClick: () => confirmDeleteBook(book.id) }
@@ -3795,6 +4860,15 @@ export default function EstudioApp() {
               </div>
             </div>
 
+            {cloudOn && (
+              <PrefacePanel
+                isDark={isDark}
+                refreshKey={prefaceRefresh}
+                showNotification={showNotification}
+                onOpenReader={openFlipbook}
+                onChanged={handlePrefaceData}
+              />
+            )}
           </div>
         )}
 
@@ -3837,6 +4911,7 @@ export default function EstudioApp() {
                 <input
                   type="text"
                   value={currentBook.title || ''}
+                  readOnly={!!currentBook.readonly}
                   onChange={(e) => handleTitleChange(e.target.value)}
                   placeholder="Título do Manuscrito..."
                   className="bg-transparent text-xl font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded-lg px-2 py-1 flex-1 min-w-[200px]"
@@ -3863,6 +4938,12 @@ export default function EstudioApp() {
                   />
                 </div>
               </div>
+
+              {currentBook.readonly && (
+                <div className="px-4 py-2 text-xs bg-indigo-500/10 text-indigo-400 border-b border-indigo-500/20">
+                  Cópia de leitura de @{currentBook.originUsername || 'autor'}. Este texto não pode ser editado.
+                </div>
+              )}
 
               <div className={`px-4 py-2 border-b flex flex-wrap items-center gap-3 text-xs ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
                 <span className="text-slate-500">Meta de hoje:</span>
@@ -3901,6 +4982,7 @@ export default function EstudioApp() {
               <div className="flex-1 p-4 flex flex-col min-h-0">
                 <textarea
                   ref={editorRef}
+                  readOnly={!!currentBook.readonly}
                   value={currentBook.content || ''}
                   onChange={(e) => handleContentChange(e.target.value)}
                   placeholder="Escreva sua história aqui... Use Ctrl+S para salvar manualmente a qualquer momento."
@@ -3962,15 +5044,38 @@ export default function EstudioApp() {
               </p>
               <p className={`text-xs mt-2 ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
                 {supabase
-                  ? (session ? 'Publicações compartilhadas com todos os usuários do app.' : 'Entre com sua conta Google (aba Perfil) para ver e publicar na comunidade.')
+                  ? (session ? 'Publicações compartilhadas com todos os usuários do app.' : 'Entre com sua conta (aba Perfil) para ver e publicar na comunidade.')
                   : 'As publicações ficam salvas apenas neste navegador. Os posts de Marina e Caio são exemplos.'}
               </p>
             </div>
 
+            {cloudOn && (
+              <div className={`flex items-center gap-1 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+                {[['feed', 'Feed'], ['people', 'Pessoas'], ['messages', unreadCount > 0 ? `Mensagens (${unreadCount})` : 'Mensagens']].map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setCommunityView(id)}
+                    aria-current={communityView === id ? 'page' : undefined}
+                    className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+                      communityView === id || (id === 'people' && communityView === 'profile')
+                        ? 'border-indigo-500 text-indigo-500'
+                        : `border-transparent ${isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800'}`
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {(!cloudOn || communityView === 'feed') ? (
+              <>
+
             {/* NOVO POST */}
             <div className={`rounded-xl border p-4 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
               <div className="flex gap-3">
-                <Avatar name={profile.name} color={profile.avatarColor} />
+                <Avatar name={profile.name} color={profile.avatarColor} src={profile.avatarUrl} />
                 <textarea
                   value={newPostText}
                   onChange={(e) => setNewPostText(e.target.value)}
@@ -4038,13 +5143,18 @@ export default function EstudioApp() {
                     className={`rounded-xl border p-5 ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Avatar name={authorName} color={authorColor} src={post.isMine ? (profile.google && profile.google.picture) : post.authorPicture} />
+                      <button
+                        type="button"
+                        onClick={() => openProfile(authorHandle)}
+                        disabled={!cloudOn}
+                        className="flex items-center gap-3 min-w-0 text-left"
+                      >
+                        <Avatar name={authorName} color={authorColor} src={post.isMine ? profile.avatarUrl : post.authorPicture} />
                         <div className="min-w-0">
                           <p className="font-semibold text-sm truncate">{authorName}</p>
                           <p className="text-xs text-slate-500 truncate">@{authorHandle} • {formatPostDate(post.createdAt)}</p>
                         </div>
-                      </div>
+                      </button>
 
                       {!post.isMine && cloudOn && (
                         <div className="flex items-center gap-1 shrink-0">
@@ -4161,6 +5271,22 @@ export default function EstudioApp() {
                 );
               })}
             </div>
+              </>
+            ) : (
+              <SocialHub
+                isDark={isDark}
+                account={session}
+                view={communityView}
+                setView={setCommunityView}
+                profileUsername={profileUsername}
+                openProfile={openProfile}
+                showNotification={showNotification}
+                onOpenReader={openFlipbook}
+                onBookSaved={addSavedBook}
+                onUnreadChange={setUnreadCount}
+                onEditProfile={() => setActiveTab('profile')}
+              />
+            )}
           </div>
         )}
 
@@ -4179,7 +5305,12 @@ export default function EstudioApp() {
 
               {/* CARTÃO DO PERFIL */}
               <div className={`rounded-xl border p-6 flex flex-col items-center text-center ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
-                <Avatar name={profile.name} color={profile.avatarColor} src={profile.google?.picture} size="w-24 h-24" text="text-4xl" />
+                <div className={`-mx-6 -mt-6 self-stretch h-28 rounded-t-xl overflow-hidden bg-gradient-to-br ${profile.avatarColor || AVATAR_GRADIENTS[0]}`}>
+                  {profile.coverUrl && <img src={profile.coverUrl} alt="" className="w-full h-full object-cover" />}
+                </div>
+                <div className={`-mt-12 rounded-full ring-4 ${isDark ? 'ring-slate-900' : 'ring-white'}`}>
+                  <Avatar name={profile.name} color={profile.avatarColor} src={profile.avatarUrl} size="w-24 h-24" text="text-4xl" />
+                </div>
                 <h2 className="text-xl font-bold mt-4">{profile.name}</h2>
                 <p className="text-sm text-slate-500">@{profile.handle}</p>
                 {profile.favoriteGenre && (
@@ -4191,18 +5322,19 @@ export default function EstudioApp() {
                   {profile.bio || 'Nenhuma bio ainda.'}
                 </p>
 
-                {supabase ? (
-                  <AccountCard
-                    isDark={isDark}
-                    session={session}
-                    onSignIn={handleSignIn}
-                    onSignOut={handleSignOut}
-                    blockedCount={blockedIds.length}
-                    onUnblockAll={handleUnblockAll}
-                  />
-                ) : (
-                  <GoogleLinkCard google={profile.google} isDark={isDark} onLink={handleGoogleLink} onUnlink={handleGoogleUnlink} />
-                )}
+                <AuthCard
+                  isDark={isDark}
+                  enabled={!!supabase}
+                  account={session}
+                  defaultName={profile.name && profile.name !== 'Autor' ? profile.name : ''}
+                  onLogin={handleLogin}
+                  onSignup={handleSignup}
+                  onReset={handleResetPassword}
+                  onChangePassword={handleChangePassword}
+                  onLogout={handleLogout}
+                  blockedCount={blockedIds.length}
+                  onUnblockAll={handleUnblockAll}
+                />
 
                 <div className={`grid grid-cols-2 gap-3 w-full mt-6 pt-6 border-t ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
                   {[
@@ -4225,7 +5357,7 @@ export default function EstudioApp() {
 
                 {[
                   { key: 'name', label: 'Nome de exibição', max: 60, placeholder: 'Seu nome' },
-                  { key: 'handle', label: 'Usuário (apenas letras, números e _)', max: 24, placeholder: 'seu_usuario' },
+                  { key: 'handle', label: cloudOn ? 'Nome de usuário (@), usado no login. Não pode ser alterado.' : 'Usuário (apenas letras, números e _)', max: 24, placeholder: 'seu_usuario', locked: cloudOn },
                   { key: 'favoriteGenre', label: 'Gênero favorito', max: 50, placeholder: 'Ex.: Fantasia, Thriller...' }
                 ].map(f => (
                   <label key={f.key} className="block">
@@ -4235,6 +5367,7 @@ export default function EstudioApp() {
                       value={profileDraft[f.key] || ''}
                       onChange={(e) => setProfileDraft(prev => ({ ...prev, [f.key]: e.target.value }))}
                       maxLength={f.max}
+                      disabled={!!f.locked}
                       placeholder={f.placeholder}
                       className={`mt-1 w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
                         isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
@@ -4258,6 +5391,28 @@ export default function EstudioApp() {
                 </label>
 
                 <div>
+                  <div className="mb-5">
+                    <input type="file" accept="image/*" ref={avatarInputRef} className="hidden" onChange={(e) => { const f = e.target.files[0]; e.target.value = ''; handleProfileImage('avatar', f); }} />
+                    <input type="file" accept="image/*" ref={coverInputRef} className="hidden" onChange={(e) => { const f = e.target.files[0]; e.target.value = ''; handleProfileImage('cover', f); }} />
+                    <span className="text-xs font-semibold text-slate-500">Foto de perfil e capa</span>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {[
+                        ['Escolher foto', () => avatarInputRef.current?.click(), true],
+                        ['Remover foto', () => handleRemoveProfileImage('avatar'), !!profile.avatarUrl],
+                        ['Escolher capa', () => coverInputRef.current?.click(), true],
+                        ['Remover capa', () => handleRemoveProfileImage('cover'), !!profile.coverUrl]
+                      ].filter(item => item[2]).map(([label, onClick]) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={onClick}
+                          className={`px-3 py-2 rounded-xl border text-xs font-medium transition-colors ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <span className="text-xs font-semibold text-slate-500">Cor do avatar</span>
                   <div className="flex flex-wrap gap-3 mt-2">
                     {AVATAR_GRADIENTS.map(g => (
@@ -4358,6 +5513,19 @@ export default function EstudioApp() {
             </div>
           </div>
         </div>
+      )}
+
+      {inviteBook && (
+        <PrefaceInviteModal
+          isDark={isDark}
+          book={inviteBook}
+          onClose={() => setInviteBook(null)}
+          onSent={() => setPrefaceRefresh(n => n + 1)}
+          showNotification={showNotification}
+        />
+      )}
+      {shareBook && (
+        <BookShareModal isDark={isDark} book={shareBook} onSave={handleSaveSharing} onClose={() => setShareBook(null)} />
       )}
 
       {/* --- MODAL: ETIQUETAS E COLEÇÃO --- */}
