@@ -1065,12 +1065,14 @@ const ComfortReader = ({ title, pages, onClose, defaultTheme, docKey }) => {
 
 // --- Player de música (playlists do YouTube via IFrame API) ---
 const MUSIC_PRESETS = [
-  { id: 'lofi-louvor', name: 'Lo-Fi Cristão • Louvor' },
-  { id: 'lofi-oracao', name: 'Lo-Fi Cristão • Oração e foco' },
-  { id: 'lofi-hinos', name: 'Lo-Fi Cristão • Hinos' }
+  { id: 'lofi-study', name: 'Lo-Fi • Study Session', url: 'https://www.youtube.com/watch?v=lTRiuFIWV54&list=RDlTRiuFIWV54&start_radio=1' },
+  { id: 'lofi-cristao', name: 'Lo-Fi Cristão', url: 'https://www.youtube.com/watch?v=oPo2zIykaSo&list=PLA3HhsTxvls3dJFEM_VM-JuNIw0etcOK7' },
+  { id: 'lofi-gospel', name: 'Covers Lo-Fi Gospel', url: 'https://www.youtube.com/watch?v=k7oKBnUf4oM&list=PLbzrXP0cfb9PHtsWAowqrx-JqmxnMgWD3' }
 ];
 
+const YOUTUBE_URL = /^https:\/\/(www\.|m\.|music\.)?(youtube\.com|youtu\.be)\//i;
 const getPlaylistId = (url = '') => (String(url).match(/[?&]list=([A-Za-z0-9_-]{10,})/) || [])[1] || '';
+const getVideoId = (url = '') => (String(url).match(/[?&]v=([A-Za-z0-9_-]{11})/) || [])[1] || '';
 
 let ytApiPromise = null;
 const loadYouTubeApi = () => {
@@ -1091,6 +1093,7 @@ const loadYouTubeApi = () => {
 const MusicPlayer = ({ isDark, showNotification }) => {
   const [links, setLinks] = useState({});
   const [presetId, setPresetId] = useState(MUSIC_PRESETS[0].id);
+  const [editing, setEditing] = useState(false);
   const [linkDraft, setLinkDraft] = useState('');
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -1099,8 +1102,17 @@ const MusicPlayer = ({ isDark, showNotification }) => {
   const holderRef = useRef(null);
   const playerRef = useRef(null);
   const volumeRef = useRef(60);
+  const errorsRef = useRef(0);
 
-  const listId = getPlaylistId(links[presetId]);
+  const preset = MUSIC_PRESETS.find(x => x.id === presetId) || MUSIC_PRESETS[0];
+  const chosenUrl = links[presetId] || preset.url || '';
+  const activeUrl = YOUTUBE_URL.test(chosenUrl) ? chosenUrl : '';
+  const listId = getPlaylistId(activeUrl);
+  const videoId = getVideoId(activeUrl);
+  // "Mix" do YouTube (código começa com RD) não funciona como playlist incorporada: toca o vídeo em repetição.
+  const mixOnly = listId.startsWith('RD') && !!videoId;
+  const hasSource = mixOnly || (!!listId && !listId.startsWith('RD'));
+  const showPlayer = hasSource && !editing;
 
   useEffect(() => {
     dbGet('settings', 'musicLinks').then(saved => { if (saved) setLinks(saved); });
@@ -1110,7 +1122,8 @@ const MusicPlayer = ({ isDark, showNotification }) => {
     setReady(false);
     setPlaying(false);
     setTrackTitle('');
-    if (!listId || !holderRef.current) return;
+    errorsRef.current = 0;
+    if (!hasSource || !holderRef.current) return;
     let cancelled = false;
     loadYouTubeApi()
       .then((YT) => {
@@ -1118,16 +1131,29 @@ const MusicPlayer = ({ isDark, showNotification }) => {
         holderRef.current.innerHTML = '';
         const mount = document.createElement('div');
         holderRef.current.appendChild(mount);
+        const config = mixOnly
+          ? { videoId, playerVars: { loop: 1, playlist: videoId, playsinline: 1, rel: 0 } }
+          : { playerVars: { listType: 'playlist', list: listId, playsinline: 1, rel: 0 } };
         playerRef.current = new YT.Player(mount, {
           width: '100%',
           height: '200',
-          playerVars: { listType: 'playlist', list: listId, playsinline: 1, rel: 0 },
+          ...config,
           events: {
             onReady: (e) => { e.target.setVolume(volumeRef.current); setReady(true); },
             onStateChange: (e) => {
               setPlaying(e.data === 1);
+              if (e.data === 1) errorsRef.current = 0;
               const title = e.target.getVideoData?.().title;
               if (title) setTrackTitle(title);
+            },
+            onError: (e) => {
+              errorsRef.current += 1;
+              if (mixOnly || errorsRef.current >= 3) {
+                showNotification('Este conteúdo não pode ser tocado aqui. Use "Abrir no YouTube" ou troque o link.');
+                return;
+              }
+              showNotification('Faixa indisponível aqui; pulando para a próxima.');
+              try { e.target.nextVideo(); } catch { /* ignore */ }
             }
           }
         });
@@ -1138,7 +1164,7 @@ const MusicPlayer = ({ isDark, showNotification }) => {
       try { playerRef.current?.destroy(); } catch { /* ignore */ }
       playerRef.current = null;
     };
-  }, [listId, showNotification]);
+  }, [hasSource, mixOnly, listId, videoId, showNotification]);
 
   const call = (fn, ...args) => { try { playerRef.current?.[fn]?.(...args); } catch { /* ignore */ } };
   const onVolume = (v) => { setVolume(v); volumeRef.current = v; call('setVolume', v); };
@@ -1146,17 +1172,19 @@ const MusicPlayer = ({ isDark, showNotification }) => {
   const persist = (next) => { setLinks(next); dbSet('settings', next, 'musicLinks'); };
   const saveLink = () => {
     const url = linkDraft.trim();
-    if (!getPlaylistId(url)) {
-      showNotification('Cole o link de uma playlist do YouTube (precisa conter "list=").');
+    if (!YOUTUBE_URL.test(url) || !getPlaylistId(url)) {
+      showNotification('Cole um link de playlist do YouTube (começa com https://youtube.com e contém "list=").');
       return;
     }
     persist({ ...links, [presetId]: url });
     setLinkDraft('');
+    setEditing(false);
   };
-  const clearLink = () => {
+  const restoreDefault = () => {
     const next = { ...links };
     delete next[presetId];
     persist(next);
+    setEditing(false);
   };
 
   const round = `p-2 rounded-full disabled:opacity-40 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`;
@@ -1168,30 +1196,30 @@ const MusicPlayer = ({ isDark, showNotification }) => {
       </h2>
 
       <div className="flex flex-col gap-2">
-        {MUSIC_PRESETS.map(p => (
+        {MUSIC_PRESETS.map(x => (
           <button
-            key={p.id}
+            key={x.id}
             type="button"
-            onClick={() => setPresetId(p.id)}
-            aria-pressed={presetId === p.id}
+            onClick={() => { setPresetId(x.id); setEditing(false); }}
+            aria-pressed={presetId === x.id}
             className={`text-left px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
-              presetId === p.id
+              presetId === x.id
                 ? 'bg-indigo-600 border-indigo-600 text-white'
                 : isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'
             }`}
           >
-            {p.name}{links[p.id] ? '' : ' (sem link)'}
+            {x.name}
           </button>
         ))}
       </div>
 
-      <div ref={holderRef} className={`rounded-xl overflow-hidden ${listId ? '' : 'hidden'}`} />
+      <div ref={holderRef} className={`rounded-xl overflow-hidden ${showPlayer ? '' : 'hidden'}`} />
 
-      {listId ? (
+      {showPlayer ? (
         <>
-          <p className="text-xs text-slate-500 truncate" title={trackTitle}>{trackTitle || 'Carregando playlist...'}</p>
+          <p className="text-xs text-slate-500 truncate" title={trackTitle}>{trackTitle || 'Carregando...'}</p>
           <div className="flex items-center justify-center gap-2">
-            <button type="button" disabled={!ready} onClick={() => call('previousVideo')} className={round} aria-label="Faixa anterior">
+            <button type="button" disabled={!ready || mixOnly} onClick={() => call('previousVideo')} className={round} aria-label="Faixa anterior">
               <SkipBack className="w-5 h-5" />
             </button>
             <button
@@ -1203,7 +1231,7 @@ const MusicPlayer = ({ isDark, showNotification }) => {
             >
               {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
             </button>
-            <button type="button" disabled={!ready} onClick={() => call('nextVideo')} className={round} aria-label="Próxima faixa">
+            <button type="button" disabled={!ready || mixOnly} onClick={() => call('nextVideo')} className={round} aria-label="Próxima faixa">
               <SkipForward className="w-5 h-5" />
             </button>
           </div>
@@ -1211,12 +1239,16 @@ const MusicPlayer = ({ isDark, showNotification }) => {
             <Volume2 className="w-4 h-4" />
             <input type="range" min="0" max="100" value={volume} onChange={(e) => onVolume(Number(e.target.value))} className="flex-1 accent-indigo-500" aria-label="Volume" />
           </label>
-          <button type="button" onClick={clearLink} className="text-xs text-rose-500 hover:underline">Trocar o link desta playlist</button>
+          {mixOnly && <p className="text-[11px] text-slate-500">Esta é uma lista de mix do YouTube, então toca o vídeo inicial em repetição.</p>}
+          <div className="flex items-center justify-between text-xs">
+            <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Abrir no YouTube</a>
+            <button type="button" onClick={() => { setLinkDraft(''); setEditing(true); }} className="text-slate-500 hover:underline">Usar outro link</button>
+          </div>
         </>
       ) : (
         <div className="space-y-2">
           <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-            Cole o link de uma playlist de lo-fi cristão do YouTube para ouvir aqui.
+            Cole o link de uma playlist do YouTube para ouvir aqui.
           </p>
           <div className="flex gap-2">
             <input
@@ -1230,6 +1262,10 @@ const MusicPlayer = ({ isDark, showNotification }) => {
               }`}
             />
             <button type="button" onClick={saveLink} className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium">Salvar</button>
+          </div>
+          <div className="flex gap-4 text-xs text-slate-500">
+            {hasSource && <button type="button" onClick={() => setEditing(false)} className="hover:underline">Cancelar</button>}
+            {links[presetId] && preset.url && <button type="button" onClick={restoreDefault} className="hover:underline">Restaurar a playlist padrão</button>}
           </div>
         </div>
       )}
