@@ -2206,6 +2206,8 @@ const AUTH_ERRORS = {
   weak_password: 'A senha deve ter de 8 a 72 caracteres.',
   not_authenticated: 'Não foi possível iniciar a sessão. Tente de novo.',
   session_error: 'Não foi possível iniciar a sessão. Se você administra o site, ative "Allow anonymous sign-ins" no Supabase.',
+  terms_required: 'Aceite os Termos de Uso para criar a conta.',
+  keys_error: 'Não foi possível abrir as chaves de mensagens com esse código.',
   network: 'Não foi possível conectar. Verifique a internet e tente de novo.'
 };
 
@@ -2271,7 +2273,7 @@ const resizeImage = (file, w, h) => new Promise((resolve, reject) => {
   img.src = url;
 });
 
-const AuthCard = ({ isDark, enabled, account, defaultName, onLogin, onSignup, onReset, onChangePassword, onLogout, blockedCount, onUnblockAll }) => {
+const AuthCard = ({ isDark, enabled, account, defaultName, onLogin, onSignup, onReset, onChangePassword, onLogout, onOpenTerms, onDeleteAccount, blockedCount, onUnblockAll }) => {
   const [mode, setMode] = useState('login');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState(defaultName || '');
@@ -2282,6 +2284,9 @@ const AuthCard = ({ isDark, enabled, account, defaultName, onLogin, onSignup, on
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deletePw, setDeletePw] = useState('');
 
   const wrap = `w-full mt-6 pt-6 border-t text-left ${isDark ? 'border-slate-800' : 'border-slate-200'}`;
   const field = `w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
@@ -2314,9 +2319,13 @@ const AuthCard = ({ isDark, enabled, account, defaultName, onLogin, onSignup, on
     e.preventDefault();
     if (mode === 'login') {
       const r = await run(() => onLogin(username, password));
-      if (r) switchMode('login');
+      if (r) {
+        if (r.recovery_code) setNewCode(formatCode(r.recovery_code));
+        switchMode('login');
+      }
     } else if (mode === 'signup') {
       if (password !== password2) { setError('As senhas não conferem.'); return; }
+      if (!acceptTerms) { setError('Para criar a conta, aceite os Termos de Uso.'); return; }
       const r = await run(() => onSignup(username, password, displayName));
       if (r) { setNewCode(formatCode(r.recovery_code)); switchMode('login'); }
     } else if (mode === 'reset') {
@@ -2362,6 +2371,31 @@ const AuthCard = ({ isDark, enabled, account, defaultName, onLogin, onSignup, on
           <button type="button" onClick={() => switchMode('password')} className={link}>Alterar senha</button>
           <button type="button" onClick={() => onLogout(true)} className="text-xs text-rose-500 hover:underline">Sair e limpar este aparelho</button>
         </div>
+        <div className="mt-4 pt-3 border-t border-slate-500/20 space-y-2">
+          {!confirmDelete ? (
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <button type="button" onClick={onOpenTerms} className={link}>Termos de uso e privacidade</button>
+              <button type="button" onClick={() => setConfirmDelete(true)} className="text-xs text-rose-500 hover:underline">Excluir minha conta</button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-rose-500">Isso apaga sua conta e tudo o que está na nuvem (perfil, manuscritos, PDFs, publicações, mensagens). Não dá para desfazer. Digite sua senha para confirmar.</p>
+              <input type="password" value={deletePw} onChange={(e) => setDeletePw(e.target.value)} autoComplete="current-password" placeholder="Sua senha" aria-label="Sua senha" className={field} />
+              {error && <p className="text-xs text-rose-500">{error}</p>}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  disabled={busy || !deletePw}
+                  onClick={async () => { const r = await run(() => onDeleteAccount(deletePw)); if (r) setConfirmDelete(false); }}
+                  className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-medium"
+                >
+                  {busy ? 'Aguarde...' : 'Excluir definitivamente'}
+                </button>
+                <button type="button" onClick={() => { setConfirmDelete(false); setDeletePw(''); setError(''); }} className={link}>Cancelar</button>
+              </div>
+            </div>
+          )}
+        </div>
         {blockedCount > 0 && (
           <button type="button" onClick={onUnblockAll} className="mt-3 text-xs underline text-slate-500">
             Desbloquear {blockedCount} {blockedCount === 1 ? 'usuário' : 'usuários'}
@@ -2401,6 +2435,15 @@ const AuthCard = ({ isDark, enabled, account, defaultName, onLogin, onSignup, on
             placeholder={mode === 'signup' ? 'Repita a senha' : 'Nova senha (mínimo de 8 caracteres)'}
             aria-label={mode === 'signup' ? 'Repita a senha' : 'Nova senha'} className={field} />
         )}
+        {mode === 'signup' && (
+          <label className="flex items-start gap-2 text-xs text-slate-500">
+            <input type="checkbox" checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)} className="mt-0.5 accent-indigo-500" />
+            <span>
+              Li e aceito os{' '}
+              <button type="button" onClick={onOpenTerms} className="text-indigo-400 underline">Termos de Uso e a Política de Privacidade</button>.
+            </span>
+          </label>
+        )}
         {error && <p className="text-xs text-rose-500">{error}</p>}
         <button type="submit" disabled={busy} className="w-full px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium transition-colors">
           {busy ? 'Aguarde...' : titles[mode]}
@@ -2410,6 +2453,7 @@ const AuthCard = ({ isDark, enabled, account, defaultName, onLogin, onSignup, on
         {mode === 'login' && <button type="button" onClick={() => switchMode('signup')} className={link}>Criar conta</button>}
         {mode === 'login' && <button type="button" onClick={() => switchMode('reset')} className={link}>Esqueci a senha</button>}
         {mode !== 'login' && <button type="button" onClick={() => switchMode('login')} className={link}>{mode === 'signup' ? 'Já tenho conta' : 'Voltar'}</button>}
+        <button type="button" onClick={onOpenTerms} className={link}>Termos e privacidade</button>
       </div>
     </div>
   );
@@ -2711,7 +2755,7 @@ const PrefacePanel = ({ isDark, refreshKey, showNotification, onOpenReader, onCh
   );
 };
 
-const SocialHub = ({ isDark, account, view, setView, profileUsername, openProfile, showNotification, onOpenReader, onBookSaved, onUnreadChange, onEditProfile }) => {
+const SocialHub = ({ isDark, account, view, setView, profileUsername, openProfile, showNotification, onOpenReader, onBookSaved, onUnreadChange, onEditProfile, e2ee, onUnlock }) => {
   const [overview, setOverview] = useState({ friends: [], incoming: [], outgoing: [] });
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -2721,6 +2765,8 @@ const SocialHub = ({ isDark, account, view, setView, profileUsername, openProfil
   const [draft, setDraft] = useState('');
   const [prof, setProf] = useState(undefined);
   const threadRef = useRef(null);
+  const [peerKey, setPeerKey] = useState(null);
+  const [unlockPw, setUnlockPw] = useState('');
 
   const muted = isDark ? 'text-slate-400' : 'text-slate-600';
   const line = isDark ? 'border-slate-800' : 'border-slate-200';
@@ -2738,19 +2784,20 @@ const SocialHub = ({ isDark, account, view, setView, profileUsername, openProfil
   const loadConvos = useCallback(async () => {
     const d = await rpc('app_conversations');
     if (d) {
-      setConvos(d);
+      setConvos(await Promise.all(d.map(async c => ({ ...c, last_text: c.last_body ? await e2ee.decrypt(c.public_key, c.last_body) : '' }))));
       onUnreadChange(d.reduce((sum, c) => sum + (Number(c.unread) || 0), 0));
     }
-  }, [onUnreadChange]);
+  }, [onUnreadChange, e2ee]);
 
   const loadThread = useCallback(async () => {
     if (!chat) return;
     const d = await rpc('app_thread', { p_other: chat.account_id });
     if (d) {
-      setThread(d);
+      setPeerKey(d.peer_key || null);
+      setThread(await Promise.all((d.messages || []).map(async m => ({ ...m, text: await e2ee.decrypt(d.peer_key, m.body) }))));
       await rpc('app_mark_read', { p_other: chat.account_id });
     }
-  }, [chat]);
+  }, [chat, e2ee]);
 
   useEffect(() => {
     if (account && view === 'people') loadOverview();
@@ -2816,14 +2863,28 @@ const SocialHub = ({ isDark, account, view, setView, profileUsername, openProfil
   const startChat = (friend) => {
     setChat({ account_id: friend.account_id, username: friend.username, display_name: friend.display_name, avatar_path: friend.avatar_path });
     setThread([]);
+    setPeerKey(null);
     setView('messages');
   };
 
   const send = async () => {
     const body = draft.trim();
     if (!body || !chat) return;
+    if (!peerKey) {
+      showNotification('Aguarde um instante: a chave de criptografia do seu amigo está carregando.');
+      return;
+    }
     setDraft('');
-    const r = await rpc('app_send_message', { p_to: chat.account_id, p_body: body });
+    let cipher;
+    try {
+      cipher = await e2ee.encrypt(peerKey, body);
+    } catch (err) {
+      console.error(err);
+      showNotification('Não foi possível cifrar a mensagem.');
+      setDraft(body);
+      return;
+    }
+    const r = await rpc('app_send_message', { p_to: chat.account_id, p_body: cipher });
     if (!r || !r.ok) {
       showNotification(r && r.error === 'not_friends' ? 'Vocês precisam ser amigos para trocar mensagens.' : 'Não foi possível enviar.');
       setDraft(body);
@@ -2934,6 +2995,18 @@ const SocialHub = ({ isDark, account, view, setView, profileUsername, openProfil
   );
 
   const renderMessages = () => {
+    if (!e2ee.ready) {
+      return (
+        <div className={`${card} p-5 space-y-3`}>
+          <p className="text-sm font-semibold">Mensagens protegidas</p>
+          <p className={`text-xs ${muted}`}>Para ler e enviar mensagens neste aparelho, digite sua senha. Ela é usada só aqui, para abrir a sua chave de criptografia.</p>
+          <div className="flex gap-2">
+            <input type="password" value={unlockPw} onChange={(e) => setUnlockPw(e.target.value)} autoComplete="current-password" placeholder="Sua senha" aria-label="Sua senha" className={field} />
+            <button type="button" onClick={async () => { const ok = await onUnlock(unlockPw); if (ok) setUnlockPw(''); }} className={primary}>Liberar</button>
+          </div>
+        </div>
+      );
+    }
     if (chat) {
       return (
         <div className={`${card} flex flex-col h-[70vh]`}>
@@ -2954,7 +3027,7 @@ const SocialHub = ({ isDark, account, view, setView, profileUsername, openProfil
             {thread.map(m => (
               <div key={m.id} className={`flex ${m.sender === account.id ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm whitespace-pre-wrap break-words ${m.sender === account.id ? 'bg-indigo-600 text-white' : isDark ? 'bg-slate-800' : 'bg-slate-100'}`}>
-                  {m.body}
+                  {m.text}
                 </div>
               </div>
             ))}
@@ -2965,7 +3038,7 @@ const SocialHub = ({ isDark, account, view, setView, profileUsername, openProfil
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-              maxLength={2000}
+              maxLength={1500}
               placeholder="Escreva uma mensagem..."
               aria-label="Mensagem"
               className={field}
@@ -2986,7 +3059,7 @@ const SocialHub = ({ isDark, account, view, setView, profileUsername, openProfil
                   <Avatar name={c.display_name} color={AVATAR_GRADIENTS[0]} src={mediaUrl(c.avatar_path)} />
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-semibold truncate">{c.display_name}</span>
-                    <span className={`block text-xs truncate ${muted}`}>{c.last_body || 'Nenhuma mensagem ainda'}</span>
+                    <span className={`block text-xs truncate ${muted}`}>{c.last_text || (c.last_body ? '[mensagem protegida]' : 'Nenhuma mensagem ainda')}</span>
                   </span>
                   {Number(c.unread) > 0 && <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-indigo-600 text-white text-[11px] font-semibold flex items-center justify-center">{c.unread}</span>}
                 </button>
@@ -3092,6 +3165,401 @@ const SocialHub = ({ isDark, account, view, setView, profileUsername, openProfil
   );
 };
 
+// --- E2EE: criptografia de mensagens ---
+// Cada conta tem um par de chaves. A chave privada fica guardada cifrada (pela senha e
+// pelo código de recuperação) e nunca sai do aparelho em texto. As mensagens são cifradas
+// com uma chave compartilhada derivada das duas chaves (ECDH P-256 + HKDF + AES-GCM).
+const E2EE_CURVE = { name: 'ECDH', namedCurve: 'P-256' };
+const textEnc = new TextEncoder();
+const textDec = new TextDecoder();
+
+const toB64 = (bytes) => {
+  const arr = new Uint8Array(bytes);
+  let out = '';
+  for (let i = 0; i < arr.length; i++) out += String.fromCharCode(arr[i]);
+  return btoa(out);
+};
+const fromB64 = (str) => Uint8Array.from(atob(str), c => c.charCodeAt(0));
+const toHex = (bytes) => Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('');
+
+const normCode = (c) => String(c || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+const generateRecoveryCode = () => toHex(crypto.getRandomValues(new Uint8Array(8)));
+// O servidor guarda só um "verificador" do código, nunca o código em si
+const recoveryVerifier = async (code) =>
+  toHex(await crypto.subtle.digest('SHA-256', textEnc.encode('estudio-narrativo-verifier:' + normCode(code))));
+
+const deriveWrapKey = async (secret, salt) => {
+  const base = await crypto.subtle.importKey('raw', textEnc.encode(String(secret).normalize('NFC')), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 600000, hash: 'SHA-256' },
+    base,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+};
+
+const wrapPrivateKey = async (pkcs8, secret) => {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveWrapKey(secret, salt);
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, pkcs8);
+  return JSON.stringify({ s: toB64(salt), i: toB64(iv), c: toB64(ct) });
+};
+
+const unwrapPrivateKey = async (blob, secret) => {
+  const { s: salt, i: iv, c: ct } = JSON.parse(blob);
+  const key = await deriveWrapKey(secret, fromB64(salt));
+  return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(iv) }, key, fromB64(ct)));
+};
+
+const generateIdentity = async () => {
+  const pair = await crypto.subtle.generateKey(E2EE_CURVE, true, ['deriveBits']);
+  const pkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', pair.privateKey));
+  const publicJwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
+  return { pkcs8, publicJwk };
+};
+
+// Chave não extraível: pode ser guardada no aparelho, mas não pode ser exportada
+const importPrivateKey = (pkcs8) => crypto.subtle.importKey('pkcs8', pkcs8, E2EE_CURVE, false, ['deriveBits']);
+
+const deriveMessageKey = async (privateKey, peerJwk) => {
+  const pub = await crypto.subtle.importKey('jwk', peerJwk, E2EE_CURVE, false, []);
+  const bits = await crypto.subtle.deriveBits({ name: 'ECDH', public: pub }, privateKey, 256);
+  const hk = await crypto.subtle.importKey('raw', bits, 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: textEnc.encode('estudio-narrativo-dm-v1') },
+    hk,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+};
+
+const encryptMessage = async (privateKey, peerJwk, text) => {
+  const key = await deriveMessageKey(privateKey, peerJwk);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, textEnc.encode(text));
+  return `v1.${toB64(iv)}.${toB64(ct)}`;
+};
+
+const decryptMessage = async (privateKey, peerJwk, payload) => {
+  const [version, iv, ct] = String(payload).split('.');
+  if (version !== 'v1') throw new Error('Formato de mensagem desconhecido');
+  const key = await deriveMessageKey(privateKey, peerJwk);
+  return textDec.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(iv) }, key, fromB64(ct)));
+};
+// --- FIM E2EE ---
+
+// --- TERMOS DE USO E PRIVACIDADE ---
+// Aumente TERMS_VERSION sempre que mudar os textos: quem já tem conta será
+// convidado a aceitar a nova versão. Preencha os três campos abaixo antes de publicar.
+const TERMS_VERSION = '2026-10';
+const TERMS_OPERATOR = 'COLE_AQUI_SEU_NOME_COMPLETO';
+const TERMS_CONTACT = 'COLE_AQUI_SEU_EMAIL_DE_CONTATO';
+const TERMS_CITY = 'COLE_AQUI_SUA_CIDADE_E_ESTADO';
+
+const buildLegal = () => ({
+  terms: [
+    {
+      title: '1. Aceitação e sobre o Estúdio Narrativo',
+      items: [
+        'O Estúdio Narrativo é um aplicativo para escrever, organizar e ler textos e PDFs, aprender técnicas de escrita, acompanhar metas, ouvir música de fundo e, para quem cria uma conta, interagir com outros autores.',
+        'Ao criar uma conta ou usar o app, você declara que leu e concorda com estes Termos de Uso e com a Política de Privacidade. Se não concordar, não use o serviço.',
+        'O app funciona de duas formas: sem conta (os dados ficam apenas no seu navegador) e com conta (parte dos dados é sincronizada na nuvem e você pode usar a comunidade). Estes termos valem para as duas. As regras sobre conta, comunidade, mensagens e compartilhamento valem apenas para quem tem conta.'
+      ]
+    },
+    {
+      title: '2. Quem pode usar',
+      items: [
+        'Você precisa ter pelo menos 14 anos. Menores de 18 anos devem ter a autorização e a supervisão de um responsável legal.',
+        'Você declara que as informações que fornecer são verdadeiras e que usará o serviço de boa-fé.'
+      ]
+    },
+    {
+      title: '3. Sua conta',
+      items: [
+        'Você cria a conta com nome de usuário e senha. Não usamos e-mail. Escolha uma senha forte e não a compartilhe: tudo o que for feito com a sua conta é de sua responsabilidade.',
+        'Ao criar a conta, o app gera um código de recuperação. Ele é a única forma de redefinir a senha caso você a esqueça e não será mostrado de novo. Se você perder a senha e o código, o acesso à conta e às mensagens privadas não poderá ser recuperado, e nem nós conseguiremos restaurá-lo.',
+        'Após várias tentativas de senha incorretas, a conta fica bloqueada por 15 minutos.',
+        'Nomes de usuário são únicos e não podem ser alterados. Podemos recusar ou retirar nomes que imitem outras pessoas, que sejam ofensivos ou que sugiram vínculo oficial com o serviço.',
+        'Você pode excluir sua conta a qualquer momento em Perfil > Conta > Excluir minha conta. A exclusão apaga seus dados da nuvem de forma definitiva, como descrito na Política de Privacidade.'
+      ]
+    },
+    {
+      title: '4. Seu conteúdo e direitos autorais',
+      items: [
+        'O que você escreve, envia ou publica continua sendo seu. O app não reivindica a titularidade dos seus textos.',
+        'Para o serviço funcionar, você nos concede uma licença limitada, gratuita e não exclusiva para armazenar, processar e exibir seu conteúdo, apenas para as finalidades do app e conforme as opções de visibilidade que você escolher. Ela termina quando você apaga o conteúdo ou a conta. As cópias de leitura que outros usuários salvaram com a sua permissão permanecem apenas na biblioteca pessoal deles, para leitura.',
+        'Você só pode enviar ou compartilhar conteúdo que seja seu, que esteja em domínio público ou que você tenha autorização para usar. Isso vale também para PDFs de livros e outros materiais de terceiros.',
+        'Conteúdo que viole direitos autorais pode ser removido, e contas reincidentes podem ser suspensas (veja “Suspensão e encerramento”).'
+      ]
+    },
+    {
+      title: '5. Biblioteca, PDFs e compartilhamento',
+      items: [
+        'Manuscritos e PDFs são privados por padrão.',
+        'Manuscritos: você escolhe entre Privado (só você), Amigos (seus amigos podem ler) e Público (qualquer pessoa com conta pode ler). Você pode mudar essa escolha quando quiser.',
+        'Permitir salvar: se você ativar, leitores podem guardar uma cópia de leitura, não editável, na biblioteca pessoal deles. Essa opção controla apenas o botão “Salvar” do app: quem pode ler um texto consegue, tecnicamente, copiá-lo. Por isso, compartilhe só o que você aceita que seja lido.',
+        'PDFs: o arquivo original fica em armazenamento privado e é acessível só por você. Ao publicar ou compartilhar um PDF por link, o texto extraído dele fica disponível para quem tiver acesso: todos os usuários com conta, se for público, ou quem tiver o link, se for por link (mesmo sem conta). Você pode remover o compartilhamento a qualquer momento.',
+        'Cópias de leitura são para uso pessoal. É proibido redistribuir, republicar, vender ou apresentar como sua uma cópia de leitura.',
+        'Você é o único responsável por ter o direito de compartilhar o que publica.'
+      ]
+    },
+    {
+      title: '6. Prefácios',
+      items: [
+        'O autor de um livro pode convidar outra pessoa para escrever o prefácio. Ao convidar, o autor permite que o convidado leia o livro inteiro, só para essa finalidade, mesmo que o livro seja privado.',
+        'O convidado pode aceitar, recusar ou desistir antes da aprovação. Ele não pode copiar, redistribuir ou usar o livro para outra finalidade.',
+        'O prefácio é de autoria de quem o escreveu. Ao enviá-lo, essa pessoa autoriza que ele seja exibido no início do livro e listado no perfil dela, quando o livro estiver visível para quem consulta o perfil, enquanto o prefácio estiver aprovado.',
+        'O prefácio só aparece depois que o autor do livro o aprova. O autor pode removê-lo a qualquer momento. Depois da aprovação, quem escreveu o prefácio deve pedir a retirada pelo contato indicado ao final destes termos.',
+        'Cópias de leitura salvas por outros usuários incluem o prefácio vigente na data em que foram salvas.'
+      ]
+    },
+    {
+      title: '7. Comunidade, perfis e amizades',
+      items: [
+        'Seu perfil (nome de exibição, @usuário, biografia, gênero favorito, foto, capa, número de amigos, livros compartilhados e prefácios escritos) pode ser visto por outras contas.',
+        'Fotos de perfil e capas ficam em armazenamento público: qualquer pessoa que tenha o endereço da imagem consegue vê-la.',
+        'Você pode buscar usuários, enviar, aceitar e recusar pedidos de amizade, remover amigos e bloquear pessoas. O bloqueio impede mensagens e pedidos entre vocês e esconde as publicações dessa pessoa para você.',
+        'Publicações, comentários e curtidas do Feed são visíveis para todas as contas. Você pode apagar suas publicações e comentários.'
+      ]
+    },
+    {
+      title: '8. Conduta e conteúdo proibido',
+      items: [
+        'Não é permitido usar o serviço para:',
+        '• violar leis ou direitos de terceiros, inclusive direitos autorais, de imagem e de privacidade;',
+        '• publicar ou compartilhar conteúdo sexual envolvendo crianças ou adolescentes, o que é crime e será comunicado às autoridades;',
+        '• ameaçar, perseguir, assediar, humilhar ou discriminar pessoas por origem, raça, religião, gênero, orientação sexual, deficiência ou qualquer outra característica;',
+        '• incitar ou exaltar violência, crimes ou automutilação;',
+        '• divulgar dados pessoais de terceiros sem autorização;',
+        '• enviar spam, golpes, links maliciosos ou propaganda não solicitada;',
+        '• se passar por outra pessoa ou por representante do serviço;',
+        '• tentar acessar contas, dados ou áreas que não são suas, burlar limites de segurança, sobrecarregar o serviço ou coletar dados de usuários de forma automatizada.',
+        'Histórias com temas sombrios, como violência, conflitos e personagens moralmente questionáveis, são bem-vindas como arte, desde que não violem os itens acima. Conteúdo sexual explícito não deve ser publicado de forma pública nem compartilhado.',
+        'Denúncias: use “Denunciar” nas publicações do Feed. Para outros conteúdos (livros, perfis, prefácios), use o contato indicado ao final. As denúncias são analisadas pelo responsável pelo serviço, que pode remover conteúdo, suspender ou encerrar contas e, quando a lei exigir, comunicar autoridades. Não há análise prévia do que é publicado: o conteúdo pode ficar visível até ser denunciado e analisado.'
+      ]
+    },
+    {
+      title: '9. Mensagens privadas',
+      items: [
+        'Mensagens só podem ser trocadas entre amigos, e você pode bloquear alguém a qualquer momento.',
+        'As mensagens são cifradas de ponta a ponta: o texto é cifrado no aparelho de quem envia e só é aberto no aparelho de quem recebe, com chaves protegidas pela sua senha. O servidor guarda apenas o texto cifrado, e o responsável pelo serviço não consegue ler as conversas.',
+        'Isso tem consequências: (a) se você perder a senha e o código de recuperação, as mensagens não poderão ser recuperadas; (b) ao redefinir a senha com o código de recuperação, suas conversas continuam acessíveis; (c) para ler as mensagens em outro aparelho, você precisa entrar com a sua senha nele.',
+        'Mesmo cifradas, algumas informações ficam visíveis ao serviço: quem enviou, para quem, quando e se a mensagem foi lida.',
+        'A criptografia protege contra leitura no servidor e em cópias de segurança. Ela não protege contra quem tenha acesso ao seu aparelho desbloqueado, contra capturas de tela feitas pelo destinatário ou contra um código do aplicativo adulterado. Como o app é entregue pela internet, você precisa confiar em quem o publica.',
+        'Como não conseguimos ler as mensagens, não conseguimos verificá-las em denúncias. Se receber ameaças ou conteúdo ilegal, bloqueie a pessoa, guarde capturas de tela e procure as autoridades.'
+      ]
+    },
+    {
+      title: '10. Aprender, música e outros recursos',
+      items: [
+        'Aprender: o conteúdo é educativo e informativo, reúne técnicas de escrita amplamente conhecidas e não garante resultados, como publicação, vendas ou aprovação. As menções a livros e autores são indicações de leitura, e os títulos e marcas pertencem aos seus titulares. Informações sobre mercado editorial e plataformas (como regras e taxas) mudam: confira sempre as fontes oficiais.',
+        'Música: o app não armazena nem distribui músicas. O player exibe playlists do YouTube, sugeridas pelo app ou indicadas por você, usando o player do próprio YouTube. O uso do player está sujeito aos termos e à política de privacidade do YouTube e do Google, e o conteúdo pertence aos respectivos titulares, que podem bloquear a reprodução em outros sites. Você é responsável pelos links que adicionar.',
+        'Leitura em voz alta: usa a voz do seu navegador ou aparelho. O navegador pode usar serviços próprios para gerar a voz; consulte a política dele.',
+        'Anotações, marcadores, progresso de leitura, metas, estatísticas, histórico de versões e progresso das lições ficam apenas no seu aparelho e não são sincronizados entre aparelhos.'
+      ]
+    },
+    {
+      title: '11. Backup, perda de dados e disponibilidade',
+      items: [
+        'Sem conta, seus textos ficam apenas no navegador deste aparelho: limpar os dados do navegador ou trocar de aparelho pode apagá-los. Use “Backup completo” com frequência.',
+        'O app é oferecido “como está” e continua em evolução. Pode haver erros, indisponibilidade e perda de dados. Faça backups do que for importante.',
+        'Podemos alterar, suspender ou encerrar recursos, com aviso razoável sempre que possível.'
+      ]
+    },
+    {
+      title: '12. Responsabilidade',
+      items: [
+        'Na medida permitida pela lei, o responsável pelo serviço não se responsabiliza por danos indiretos, perda de dados, lucros cessantes ou por conteúdos publicados por usuários. Isso não afasta direitos que a lei garante ao consumidor nem a responsabilidade por dolo ou culpa grave.',
+        'Você é responsável pelo conteúdo que publica e pelas consequências do que faz no serviço.'
+      ]
+    },
+    {
+      title: '13. Direitos autorais: como pedir a remoção',
+      items: [
+        'Se você acredita que um conteúdo viola direitos autorais seus, envie ao contato indicado ao final: seu nome e forma de contato, a identificação da obra, onde o conteúdo aparece (nome de usuário e título), uma declaração de que você é o titular ou o representante e de que a publicação não foi autorizada.',
+        'Analisaremos o pedido e, se for o caso, removeremos o conteúdo. O autor da publicação poderá ser informado e apresentar contestação.'
+      ]
+    },
+    {
+      title: '14. Suspensão e encerramento',
+      items: [
+        'Podemos advertir, remover conteúdo, suspender ou encerrar contas que violem estes termos ou a lei, ou que representem risco ao serviço ou a outras pessoas. Quando possível, informaremos o motivo. Você pode encerrar sua conta quando quiser.'
+      ]
+    },
+    {
+      title: '15. Alterações nestes termos',
+      items: [
+        'Podemos atualizar estes termos. Quando houver mudança relevante, mostraremos um aviso no app e pediremos que você aceite a nova versão para continuar usando a conta. A versão em vigor aparece no fim desta página.'
+      ]
+    },
+    {
+      title: '16. Lei aplicável e foro',
+      items: [
+        `Estes termos seguem as leis do Brasil. Fica eleito o foro do seu domicílio, quando você for consumidor, e o foro da comarca de ${TERMS_CITY} nos demais casos.`
+      ]
+    },
+    {
+      title: '17. Contato',
+      items: [
+        `Responsável: ${TERMS_OPERATOR}. Dúvidas, denúncias, pedidos sobre seus dados e notificações de direitos autorais: ${TERMS_CONTACT}.`
+      ]
+    }
+  ],
+  privacy: [
+    {
+      title: '1. Quem é o responsável',
+      items: [
+        `O responsável pelo tratamento dos dados (controlador) é ${TERMS_OPERATOR}. Contato: ${TERMS_CONTACT}.`
+      ]
+    },
+    {
+      title: '2. Dados que ficam só no seu aparelho',
+      items: [
+        'O app guarda no navegador (IndexedDB e armazenamento local) seus manuscritos, documentos de apoio, PDFs e textos extraídos, anotações, marcadores, progresso de leitura, metas e estatísticas de escrita, histórico de versões, preferências (tema, leitor, links de música), progresso das lições e o perfil local.',
+        'Sem conta, nada disso é enviado a nós.'
+      ]
+    },
+    {
+      title: '3. Dados que vão para a nuvem (apenas com conta)',
+      items: [
+        '• Conta: nome de usuário, senha (guardada somente como hash, nunca em texto), verificador do código de recuperação, versão e data de aceite dos termos e contagem de tentativas de senha incorretas.',
+        '• Perfil: nome de exibição, biografia, gênero favorito, cor do avatar, foto e capa.',
+        '• Biblioteca: manuscritos (texto, título, autor, gênero, sinopse, etiquetas, coleção, visibilidade e origem de cópias de leitura) e dados dos PDFs, além do arquivo original em armazenamento privado.',
+        '• Social: publicações, comentários, curtidas, pedidos de amizade e amigos, bloqueios, denúncias, convites e textos de prefácio.',
+        '• Mensagens: texto cifrado de ponta a ponta, remetente, destinatário, data e situação de leitura. Também guardamos sua chave pública e sua chave privada já cifrada pela senha e pelo código de recuperação.',
+        '• Dados técnicos básicos de funcionamento (como endereço IP e registros de acesso), tratados pelos provedores de infraestrutura.'
+      ]
+    },
+    {
+      title: '4. Para que usamos os dados',
+      items: [
+        'Para oferecer o serviço (conta, sincronização, comunidade, mensagens, compartilhamento e prefácios), manter a segurança, prevenir abusos (limites de tentativas, denúncias e bloqueios) e cumprir obrigações legais.',
+        'Não vendemos seus dados e não os usamos para publicidade.'
+      ]
+    },
+    {
+      title: '5. Bases legais (LGPD)',
+      items: [
+        'Tratamos dados para executar o serviço que você pediu, com base no seu consentimento (por exemplo, ao aceitar estes termos e ao escolher tornar algo visível), para cumprir obrigações legais e, no caso de segurança e prevenção a fraudes, com base no legítimo interesse.'
+      ]
+    },
+    {
+      title: '6. Com quem os dados passam',
+      items: [
+        'Usamos provedores de infraestrutura: Supabase (banco de dados, autenticação e arquivos) e Render (hospedagem do site). Esses serviços podem operar em outros países, o que caracteriza transferência internacional de dados, feita com as salvaguardas previstas na LGPD.',
+        'O leitor de PDF carrega um componente de um servidor de conteúdo (Cloudflare/cdnjs). Quando você usa o player de música, o YouTube/Google carrega no seu aparelho e trata dados conforme a própria política.',
+        'Não compartilhamos seus dados com terceiros, exceto quando você escolhe tornar algo visível, quando a lei ou uma ordem judicial exigir ou para proteger direitos e a segurança de pessoas.'
+      ]
+    },
+    {
+      title: '7. Quem vê o quê',
+      items: [
+        '• Perfil e Feed: todas as contas.',
+        '• Livros: conforme a visibilidade escolhida (privado, amigos ou público).',
+        '• Publicações compartilhadas por link: quem tiver o link, mesmo sem conta.',
+        '• Arquivo original do PDF: somente você.',
+        '• Mensagens: somente você e o destinatário (cifradas de ponta a ponta).',
+        '• Prefácios: o autor do livro e quem o escreveu; depois de aprovado, também os leitores do livro e quem visita o perfil de quem o escreveu.',
+        '• Foto de perfil e capa: quem tiver o endereço da imagem.'
+      ]
+    },
+    {
+      title: '8. Segurança',
+      items: [
+        'Usamos conexão segura (HTTPS), senhas com hash (bcrypt), regras de acesso por linha no banco de dados, limites de tentativas de senha, armazenamento privado para PDFs e criptografia de ponta a ponta para mensagens. Nenhum sistema é totalmente seguro.',
+        'O responsável pelo serviço pode, tecnicamente, acessar dados que não são cifrados de ponta a ponta, como manuscritos, publicações e perfis. Esse acesso é limitado a manutenção, segurança, cumprimento de lei e análise de denúncias.',
+        'Em caso de incidente de segurança relevante, comunicaremos os titulares e a ANPD nos termos da lei.'
+      ]
+    },
+    {
+      title: '9. Por quanto tempo guardamos os dados',
+      items: [
+        'Enquanto a conta existir. Ao excluir a conta (Perfil > Conta > Excluir minha conta), apagamos seus dados da nuvem: perfil, manuscritos, PDFs e arquivos, publicações, comentários, curtidas, amizades, mensagens e convites. As cópias de leitura que outros usuários salvaram permanecem na biblioteca pessoal deles. Cópias técnicas de segurança dos provedores podem permanecer por um período limitado.',
+        'Os dados guardados no seu aparelho continuam nele até você apagá-los, com “Sair e limpar este aparelho” ou limpando os dados do navegador.'
+      ]
+    },
+    {
+      title: '10. Seus direitos (LGPD)',
+      items: [
+        'Você pode pedir confirmação do tratamento, acesso, correção, anonimização, bloqueio ou eliminação de dados desnecessários, portabilidade, informação sobre compartilhamento e revogação do consentimento, além de peticionar à Autoridade Nacional de Proteção de Dados (ANPD).',
+        'No app, você pode editar o perfil e os textos, exportar seus dados com “Backup completo” e excluir a conta. Para outros pedidos, use o contato indicado.'
+      ]
+    },
+    {
+      title: '11. Crianças e adolescentes',
+      items: [
+        'O serviço é para pessoas com 14 anos ou mais, e menores de 18 anos devem ter autorização de um responsável legal. Se soubermos que há dados de quem não atende a esse requisito, poderemos excluí-los.'
+      ]
+    },
+    {
+      title: '12. Armazenamento local e cookies',
+      items: [
+        'Não usamos cookies de publicidade nem de rastreamento próprios. O app usa o armazenamento do navegador para guardar seus dados e a sessão da conta. O player do YouTube pode definir cookies próprios.'
+      ]
+    },
+    {
+      title: '13. Alterações',
+      items: [
+        'Podemos atualizar esta política. A versão em vigor aparece no fim desta página, e mudanças relevantes serão informadas no app.'
+      ]
+    }
+  ]
+});
+
+const LegalModal = ({ isDark, initialTab, onClose }) => {
+  const [tab, setTab] = useState(initialTab === 'privacy' ? 'privacy' : 'terms');
+  const doc = useMemo(() => buildLegal(), []);
+  const pending = [TERMS_OPERATOR, TERMS_CONTACT, TERMS_CITY].some(v => String(v).startsWith('COLE_AQUI'));
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const tabClass = (active) => `px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+    active ? 'border-indigo-500 text-indigo-500' : `border-transparent ${isDark ? 'text-slate-400' : 'text-slate-500'}`
+  }`;
+
+  return (
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className={`max-w-2xl w-full h-[88vh] flex flex-col border rounded-xl shadow-xl ${isDark ? 'border-slate-800 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white text-slate-900'}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className={`flex items-center justify-between px-5 pt-4 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+          <div className="flex gap-1">
+            <button type="button" onClick={() => setTab('terms')} className={tabClass(tab === 'terms')}>Termos de Uso</button>
+            <button type="button" onClick={() => setTab('privacy')} className={tabClass(tab === 'privacy')}>Política de Privacidade</button>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Fechar" className="p-1 mb-2 rounded-lg hover:bg-slate-500/10"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
+          {pending && (
+            <p className="text-xs rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-500 p-3">
+              Atenção, administrador: preencha TERMS_OPERATOR, TERMS_CONTACT e TERMS_CITY no código antes de publicar este texto.
+            </p>
+          )}
+          {doc[tab].map(section => (
+            <section key={section.title}>
+              <h3 className="font-semibold text-sm mb-2">{section.title}</h3>
+              {section.items.map((t, i) => (
+                <p key={i} className={`text-sm leading-relaxed mb-2 ${isDark ? 'text-slate-300' : 'text-slate-700'} ${t.startsWith('• ') ? 'pl-3' : ''}`}>{t}</p>
+              ))}
+            </section>
+          ))}
+        </div>
+        <div className={`px-5 py-3 border-t text-xs text-slate-500 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+          Versão {TERMS_VERSION} • Contato: {TERMS_CONTACT}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- COMPONENTE PRINCIPAL ---
 
 export default function EstudioApp() {
@@ -3138,6 +3606,22 @@ export default function EstudioApp() {
   const [shareBook, setShareBook] = useState(null);
   const avatarInputRef = useRef(null);
   const coverInputRef = useRef(null);
+  const [legalOpen, setLegalOpen] = useState(false);
+  const [termsPending, setTermsPending] = useState(false);
+  const privateKeyRef = useRef(null);
+  const [e2eeReady, setE2eeReady] = useState(false);
+  const e2ee = useMemo(() => ({
+    ready: e2eeReady,
+    encrypt: (peerJwk, text) => encryptMessage(privateKeyRef.current, peerJwk, text),
+    decrypt: async (peerJwk, cipher) => {
+      if (!privateKeyRef.current || !peerJwk) return '[mensagem protegida]';
+      try {
+        return await decryptMessage(privateKeyRef.current, peerJwk, cipher);
+      } catch {
+        return '[mensagem não pôde ser aberta]';
+      }
+    }
+  }), [e2eeReady]);
   const cloudOn = !!(supabase && session);
   const booksRef = useRef([]);
   const pdfsRef = useRef([]);
@@ -3749,36 +4233,166 @@ export default function EstudioApp() {
     }
   };
 
+  const storeKey = async (accountId, key) => {
+    await dbSet('settings', key, `e2eeKey:${accountId}`);
+    privateKeyRef.current = key;
+    setE2eeReady(true);
+  };
+
+  // Cria o par de chaves da conta, protegido pela senha e pelo código de recuperação
+  const createKeys = async (password, code, newVerifier) => {
+    const { pkcs8, publicJwk } = await generateIdentity();
+    const res = await rpc('app_set_keys', {
+      p_public_key: publicJwk,
+      p_wrapped_pw: await wrapPrivateKey(pkcs8, password),
+      p_wrapped_rc: await wrapPrivateKey(pkcs8, normCode(code)),
+      p_new_verifier: newVerifier
+    });
+    if (!res || !res.ok) return null;
+    return importPrivateKey(pkcs8);
+  };
+
+  const setupKeysAfterLogin = async (accountId, password) => {
+    const keys = await rpc('app_get_my_keys');
+    if (keys && keys.wrapped_by_password) {
+      try {
+        const key = await importPrivateKey(await unwrapPrivateKey(keys.wrapped_by_password, password));
+        await storeKey(accountId, key);
+      } catch (err) {
+        console.error(err);
+        showNotification('Não foi possível abrir as chaves das mensagens neste aparelho.');
+      }
+      return null;
+    }
+    // Conta sem chaves: cria agora e gera um novo código de recuperação
+    const code = generateRecoveryCode();
+    const key = await createKeys(password, code, await recoveryVerifier(code));
+    if (!key) return null;
+    await storeKey(accountId, key);
+    return { recovery_code: code };
+  };
+
   const handleLogin = async (username, password) => {
     const r = await callAuth('app_login', { p_username: username, p_password: password });
-    if (r.ok) {
-      setSession({ id: r.id, username: r.username, display_name: r.display_name });
-      showNotification(`Bem-vindo, ${r.display_name}!`);
+    if (!r.ok) return r;
+    setSession({ id: r.id, username: r.username, display_name: r.display_name, terms_version: r.terms_version });
+    if (r.terms_version !== TERMS_VERSION) setTermsPending(true);
+    showNotification(`Bem-vindo, ${r.display_name}!`);
+    let extra = null;
+    try {
+      extra = await setupKeysAfterLogin(r.id, password);
+    } catch (err) {
+      console.error(err);
     }
-    return r;
+    return extra ? { ...r, recovery_code: extra.recovery_code } : r;
   };
 
   const handleSignup = async (username, password, displayName) => {
-    const r = await callAuth('app_signup', { p_username: username, p_password: password, p_display_name: displayName });
-    if (r.ok) {
-      setSession({ id: r.id, username: r.username, display_name: r.display_name });
-      await supabase.from('profiles').update({
-        bio: profile.bio || '',
-        favorite_genre: profile.favoriteGenre || '',
-        avatar_color: profile.avatarColor || ''
-      }).eq('account_id', r.id);
-      showNotification('Conta criada!');
+    const code = generateRecoveryCode();
+    const r = await callAuth('app_signup', {
+      p_username: username,
+      p_password: password,
+      p_display_name: displayName,
+      p_terms_version: TERMS_VERSION,
+      p_recovery_verifier: await recoveryVerifier(code)
+    });
+    if (!r.ok) return r;
+    setSession({ id: r.id, username: r.username, display_name: r.display_name, terms_version: r.terms_version });
+    await supabase.from('profiles').update({
+      bio: profile.bio || '',
+      favorite_genre: profile.favoriteGenre || '',
+      avatar_color: profile.avatarColor || ''
+    }).eq('account_id', r.id);
+    try {
+      const key = await createKeys(password, code, null);
+      if (key) await storeKey(r.id, key);
+      else showNotification('Conta criada, mas as chaves das mensagens serão criadas no próximo login.');
+    } catch (err) {
+      console.error(err);
     }
-    return r;
+    showNotification('Conta criada!');
+    return { ...r, recovery_code: code };
   };
 
-  const handleResetPassword = (username, code, newPassword) =>
-    callAuth('app_reset_password', { p_username: username, p_code: code, p_new: newPassword });
+  const handleResetPassword = async (username, code, newPassword) => {
+    const verifier = await recoveryVerifier(code);
+    const check = await callAuth('app_reset_check', { p_username: username, p_verifier: verifier });
+    if (!check.ok) return check;
+    const newCode = generateRecoveryCode();
+    let wrappedPw = null;
+    let wrappedRc = null;
+    if (check.wrapped_by_recovery) {
+      try {
+        const pkcs8 = await unwrapPrivateKey(check.wrapped_by_recovery, normCode(code));
+        wrappedPw = await wrapPrivateKey(pkcs8, newPassword);
+        wrappedRc = await wrapPrivateKey(pkcs8, normCode(newCode));
+      } catch (err) {
+        console.error(err);
+        return { ok: false, error: 'keys_error' };
+      }
+    }
+    const r = await callAuth('app_reset_password', {
+      p_username: username,
+      p_verifier: verifier,
+      p_new: newPassword,
+      p_wrapped_pw: wrappedPw,
+      p_wrapped_rc: wrappedRc,
+      p_new_verifier: await recoveryVerifier(newCode)
+    });
+    return r.ok ? { ...r, recovery_code: newCode } : r;
+  };
 
   const handleChangePassword = async (oldPassword, newPassword) => {
-    const r = await callAuth('app_change_password', { p_old: oldPassword, p_new: newPassword });
+    const newCode = generateRecoveryCode();
+    let wrappedPw = null;
+    let wrappedRc = null;
+    const keys = await rpc('app_get_my_keys');
+    if (keys && keys.wrapped_by_password) {
+      try {
+        const pkcs8 = await unwrapPrivateKey(keys.wrapped_by_password, oldPassword);
+        wrappedPw = await wrapPrivateKey(pkcs8, newPassword);
+        wrappedRc = await wrapPrivateKey(pkcs8, normCode(newCode));
+      } catch (err) {
+        return { ok: false, error: 'invalid_credentials' };
+      }
+    }
+    const r = await callAuth('app_change_password', {
+      p_old: oldPassword,
+      p_new: newPassword,
+      p_wrapped_pw: wrappedPw,
+      p_wrapped_rc: wrappedRc,
+      p_new_verifier: await recoveryVerifier(newCode)
+    });
     if (r.ok) showNotification('Senha alterada.');
-    return r;
+    return r.ok ? { ...r, recovery_code: newCode } : r;
+  };
+
+  // Libera as mensagens neste aparelho quando a sessão existe mas a chave local não
+  const handleUnlock = async (password) => {
+    try {
+      const keys = await rpc('app_get_my_keys');
+      if (!keys || !keys.wrapped_by_password) {
+        showNotification('Sua conta ainda não tem chaves. Saia e entre de novo para criá-las.');
+        return false;
+      }
+      const key = await importPrivateKey(await unwrapPrivateKey(keys.wrapped_by_password, password));
+      await storeKey(sessionUid, key);
+      return true;
+    } catch (err) {
+      console.error(err);
+      showNotification('Senha incorreta ou chave indisponível.');
+      return false;
+    }
+  };
+
+  const handleAcceptTerms = async () => {
+    const r = await rpc('app_accept_terms', { p_version: TERMS_VERSION });
+    if (!r || !r.ok) {
+      showNotification('Não foi possível registrar o aceite agora.');
+      return;
+    }
+    setSession(prev => (prev ? { ...prev, terms_version: TERMS_VERSION } : prev));
+    setTermsPending(false);
   };
 
   const handleLogout = async (wipe) => {
@@ -3786,9 +4400,11 @@ export default function EstudioApp() {
     try {
       await supabase.rpc('app_logout');
       await supabase.auth.signOut();
+      if (sessionUid) await dbDelete('settings', `e2eeKey:${sessionUid}`);
     } catch (err) {
       console.error(err);
     }
+    privateKeyRef.current = null;
     if (wipe) {
       await new Promise((resolve) => {
         const req = indexedDB.deleteDatabase(DB_NAME);
@@ -3799,6 +4415,31 @@ export default function EstudioApp() {
       });
     }
     window.location.reload();
+  };
+
+  const handleDeleteAccount = async (password) => {
+    const check = await callAuth('app_delete_account', { p_password: password, p_commit: false });
+    if (!check.ok) return check;
+    const id = sessionUid;
+    for (const bucket of ['pdfs', 'media']) {
+      try {
+        const { data: files } = await supabase.storage.from(bucket).list(id, { limit: 1000 });
+        if (files && files.length > 0) await supabase.storage.from(bucket).remove(files.map(f => `${id}/${f.name}`));
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    const r = await callAuth('app_delete_account', { p_password: password, p_commit: true });
+    if (!r.ok) return r;
+    try {
+      await supabase.auth.signOut();
+      await dbDelete('settings', `e2eeKey:${id}`);
+    } catch (err) {
+      console.error(err);
+    }
+    showNotification('Conta excluída.');
+    setTimeout(() => window.location.reload(), 800);
+    return r;
   };
 
   // --- Foto de perfil e capa ---
@@ -4336,7 +4977,16 @@ export default function EstudioApp() {
         return;
       }
       const me = await rpc('app_me');
-      if (alive) setSession(me || null);
+      if (!alive) return;
+      setSession(me || null);
+      if (me) {
+        if (me.terms_version !== TERMS_VERSION) setTermsPending(true);
+        const stored = await dbGet('settings', `e2eeKey:${me.id}`);
+        if (alive && stored) {
+          privateKeyRef.current = stored;
+          setE2eeReady(true);
+        }
+      }
     })();
     return () => { alive = false; };
   }, []);
@@ -5285,6 +5935,8 @@ export default function EstudioApp() {
                 onBookSaved={addSavedBook}
                 onUnreadChange={setUnreadCount}
                 onEditProfile={() => setActiveTab('profile')}
+                e2ee={e2ee}
+                onUnlock={handleUnlock}
               />
             )}
           </div>
@@ -5332,6 +5984,8 @@ export default function EstudioApp() {
                   onReset={handleResetPassword}
                   onChangePassword={handleChangePassword}
                   onLogout={handleLogout}
+                  onOpenTerms={() => setLegalOpen('terms')}
+                  onDeleteAccount={handleDeleteAccount}
                   blockedCount={blockedIds.length}
                   onUnblockAll={handleUnblockAll}
                 />
@@ -5455,6 +6109,9 @@ export default function EstudioApp() {
           </div>
         )}
 
+        <div className="pt-10 text-center text-xs text-slate-500">
+          <button type="button" onClick={() => setLegalOpen('terms')} className="hover:underline">Termos de uso e privacidade</button>
+        </div>
       </main>
 
       {/* --- LEITOR (MODO DE LEITURA CONFORTÁVEL) --- */}
@@ -5526,6 +6183,22 @@ export default function EstudioApp() {
       )}
       {shareBook && (
         <BookShareModal isDark={isDark} book={shareBook} onSave={handleSaveSharing} onClose={() => setShareBook(null)} />
+      )}
+
+      {legalOpen && <LegalModal isDark={isDark} initialTab={legalOpen} onClose={() => setLegalOpen(false)} />}
+
+      {termsPending && session && (
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-4">
+          <div className={`max-w-md w-full border rounded-xl p-6 shadow-xl space-y-4 ${isDark ? 'border-slate-800 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white text-slate-900'}`}>
+            <h3 className="font-bold text-lg">Termos de Uso atualizados</h3>
+            <p className="text-sm">Para continuar usando sua conta, leia e aceite a versão atual dos Termos de Uso e da Política de Privacidade.</p>
+            <div className="flex flex-wrap gap-3">
+              <button type="button" onClick={() => setLegalOpen('terms')} className={`px-4 py-2 rounded-xl text-sm font-medium border ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'}`}>Ler</button>
+              <button type="button" onClick={handleAcceptTerms} className="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white">Aceitar e continuar</button>
+              <button type="button" onClick={() => handleLogout(false)} className="px-4 py-2 rounded-xl text-sm text-slate-500 hover:underline">Sair</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* --- MODAL: ETIQUETAS E COLEÇÃO --- */}
